@@ -1,0 +1,53 @@
+# Bite & Brew — on-premises deployment (café back-office PC / mini server).
+#   cp .env.docker.example .env.docker   # set strong passwords
+#   docker compose --env-file .env.docker up -d --build
+#   docker compose exec app sh -c "cd apps/server && npx tsx src/scripts/create-owner.ts"
+# Put a TLS reverse proxy (Caddy/nginx) in front; COOKIE_SECURE=true requires HTTPS.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bitebrew
+      POSTGRES_USER: bitebrew
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      TZ: Asia/Dhaka
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bitebrew -d bitebrew"]
+      interval: 10s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      DATABASE_URL: postgresql://bitebrew:${POSTGRES_PASSWORD}@db:5432/bitebrew
+      WEB_ORIGIN: ${WEB_ORIGIN:?set WEB_ORIGIN, e.g. https://bitebrew.local}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+    ports:
+      - "4000:4000"
+
+  backup:
+    image: postgres:16
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://bitebrew:${POSTGRES_PASSWORD}@db:5432/bitebrew
+      RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+    volumes:
+      - ./scripts/backup.sh:/backup.sh:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    # Daily backup loop; on failure retry after 5 minutes. Also copy ./backups off-site (USB/cloud).
+    entrypoint: ["sh", "-c", "while true; do if bash /backup.sh /backups; then sleep 86400; else echo 'BACKUP FAILED - retrying in 5 min'; sleep 300; fi; done"]
+
+volumes:
+  pgdata:

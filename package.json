@@ -1,0 +1,28 @@
+{
+  "name": "bite-and-brew",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Bite & Brew — Café & Hangout management platform (POS, inventory, printing, finance)",
+  "workspaces": [
+    "packages/shared",
+    "apps/server",
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:shared": "npm run build -w @bitebrew/shared",
+    "build": "npm run build:shared && npm run build -w @bitebrew/server && npm run build -w @bitebrew/web",
+    "dev": "npm run build:shared && node scripts/dev.mjs",
+    "db:migrate": "npm run db:migrate -w @bitebrew/server",
+    "db:deploy": "npm run db:deploy -w @bitebrew/server",
+    "db:seed": "npm run db:seed -w @bitebrew/server",
+    "db:seed:demo": "npm run db:seed:demo -w @bitebrew/server",
+    "create-owner": "npm run create-owner -w @bitebrew/server",
+    "typecheck": "npm run build:shared && npm run typecheck -w @bitebrew/server && npm run typecheck -w @bitebrew/web",
+    "test": "npm run build:shared && npm run test -w @bitebrew/shared && npm run test -w @bitebrew/server",
+    "test:e2e": "node e2e/run-e2e.mjs",
+    "start": "npm run start -w @bitebrew/server"
+  }
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#3b2418"/>
+  <circle cx="256" cy="256" r="196" fill="none" stroke="#c9a24e" stroke-width="10"/>
+  <path d="M150 210h180v70c0 55-40 96-90 96s-90-41-90-96z" fill="#f7f0e3"/>
+  <path d="M330 228h22c26 0 44 18 44 40s-18 40-44 40h-26" fill="none" stroke="#f7f0e3" stroke-width="20" stroke-linecap="round"/>
+  <path d="M200 120c-14 18 14 30 0 52M248 110c-14 20 14 34 0 58M296 120c-14 18 14 30 0 52" fill="none" stroke="#c9a24e" stroke-width="12" stroke-linecap="round"/>
+  <text x="240" y="318" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="70" font-weight="700" fill="#3b2418">B&amp;B</text>
+</svg>

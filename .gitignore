@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+apps/server/src/generated/
+backups/
+e2e/screenshots/
+e2e/results/
+*.log
+.DS_Store
+coverage/

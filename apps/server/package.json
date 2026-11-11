@@ -1,0 +1,49 @@
+{
+  "name": "@bitebrew/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "prisma generate && tsx watch --clear-screen=false src/index.ts",
+    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "typecheck": "prisma generate && tsc -p tsconfig.json --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev && prisma generate",
+    "db:deploy": "prisma migrate deploy && prisma generate",
+    "db:seed": "prisma generate && tsx src/scripts/seed.ts",
+    "db:seed:demo": "prisma generate && tsx src/scripts/seed-demo.ts",
+    "create-owner": "prisma generate && tsx src/scripts/create-owner.ts",
+    "test": "node tests/run-tests.mjs"
+  },
+  "dependencies": {
+    "@bitebrew/shared": "0.1.0",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "argon2": "0.45.2",
+    "cookie-parser": "1.4.7",
+    "dotenv": "17.4.2",
+    "express": "5.3.0",
+    "express-rate-limit": "8.7.4",
+    "helmet": "8.3.0",
+    "pg": "8.23.1",
+    "pino": "10.4.0",
+    "pino-http": "11.0.0",
+    "prisma": "7.10.1",
+    "tsx": "4.20.6",
+    "ws": "8.22.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "1.4.10",
+    "@types/express": "5.0.5",
+    "@types/node": "22.19.0",
+    "@types/pg": "8.15.6",
+    "@types/supertest": "6.0.3",
+    "@types/ws": "8.18.1",
+    "pino-pretty": "13.1.2",
+    "supertest": "7.1.4",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}

@@ -1,0 +1,150 @@
+// Bite & Brew — Prisma schema
+//
+// Conventions
+// - Money is stored as integer minor units (paisa) in *Minor columns. Never floats.
+// - All timestamps are UTC (timestamptz). Business-day grouping uses the
+//   configured timezone (BusinessSettings.timezone, default Asia/Dhaka).
+// - Editable records carry a `version` column for optimistic concurrency, so
+//   two staff editing the same record cannot silently overwrite each other.
+// - Phase 1 contains the foundation tables only. Later phases add their tables
+//   through new migrations (see docs/DATABASE.md for the full planned model).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  moduleFormat = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  CASHIER
+  BARISTA
+  KITCHEN
+}
+
+enum MenuGroup {
+  FOOD
+  DRINKS
+  DESSERTS
+}
+
+enum PrepStation {
+  KITCHEN
+  BARISTA
+}
+
+enum NumberGrouping {
+  LAKH
+  INTERNATIONAL
+}
+
+model User {
+  id               String    @id @default(uuid()) @db.Uuid
+  username         String    @unique @db.VarChar(50)
+  fullName         String    @map("full_name") @db.VarChar(100)
+  passwordHash     String    @map("password_hash")
+  role             Role
+  isActive         Boolean   @default(true) @map("is_active")
+  failedLoginCount Int       @default(0) @map("failed_login_count")
+  lockedUntil      DateTime? @map("locked_until") @db.Timestamptz(3)
+  lastLoginAt      DateTime? @map("last_login_at") @db.Timestamptz(3)
+  version          Int       @default(0)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions  Session[]
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+model Session {
+  id         String    @id @default(uuid()) @db.Uuid
+  /// SHA-256 of the opaque session token. The raw token only lives in the httpOnly cookie.
+  tokenHash  String    @unique @map("token_hash") @db.Char(64)
+  userId     String    @map("user_id") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+  ipAddress  String?   @map("ip_address") @db.VarChar(64)
+  userAgent  String?   @map("user_agent") @db.VarChar(300)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+/// Singleton row (id = 1) holding café-wide configuration.
+model BusinessSettings {
+  id                   Int            @id @default(1)
+  businessName         String         @default("Bite & Brew") @map("business_name") @db.VarChar(100)
+  tagline              String         @default("Café & Hangout") @db.VarChar(100)
+  establishedYear      Int            @default(2027) @map("established_year")
+  address              String         @default("") @db.VarChar(300)
+  phone                String         @default("") @db.VarChar(40)
+  email                String         @default("") @db.VarChar(120)
+  currencyCode         String         @default("BDT") @map("currency_code") @db.Char(3)
+  currencySymbol       String         @default("৳") @map("currency_symbol") @db.VarChar(5)
+  currencyDecimals     Int            @default(2) @map("currency_decimals")
+  numberGrouping       NumberGrouping @default(LAKH) @map("number_grouping")
+  timezone             String         @default("Asia/Dhaka") @db.VarChar(64)
+  /// Hour (0–23, local time) at which a new business day begins, for late-night trade.
+  businessDayStartHour Int            @default(0) @map("business_day_start_hour")
+  dineInEnabled        Boolean        @default(true) @map("dine_in_enabled")
+  takeawayEnabled      Boolean        @default(true) @map("takeaway_enabled")
+  receiptFooter        String         @default("Thank you for visiting Bite & Brew!") @map("receipt_footer") @db.VarChar(300)
+  version              Int            @default(0)
+  updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  updatedById          String?        @map("updated_by_id") @db.Uuid
+
+  @@map("business_settings")
+}
+
+model MenuCategory {
+  id             String      @id @default(uuid()) @db.Uuid
+  name           String      @db.VarChar(60)
+  /// Lower-cased, whitespace-collapsed name used to enforce case-insensitive uniqueness.
+  normalizedName String      @unique @map("normalized_name") @db.VarChar(60)
+  group          MenuGroup
+  /// Default preparation station / printer for items in this category.
+  station        PrepStation
+  description    String?     @db.VarChar(300)
+  sortOrder      Int         @default(0) @map("sort_order")
+  isActive       Boolean     @default(true) @map("is_active")
+  version        Int         @default(0)
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([group, sortOrder])
+  @@map("menu_categories")
+}
+
+/// Append-only record of sensitive business changes. Never updated or deleted by the app.
+model AuditLog {
+  id          BigInt   @id @default(autoincrement())
+  occurredAt  DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  actorId     String?  @map("actor_id") @db.Uuid
+  action      String   @db.VarChar(80)
+  entityType  String   @map("entity_type") @db.VarChar(60)
+  entityId    String?  @map("entity_id") @db.VarChar(64)
+  before      Json?
+  after       Json?
+  ipAddress   String?  @map("ip_address") @db.VarChar(64)
+  userAgent   String?  @map("user_agent") @db.VarChar(300)
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([occurredAt])
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@map("audit_logs")
+}
