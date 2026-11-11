@@ -91,8 +91,10 @@ categoriesRouter.delete('/:id', requirePermission('menu.manage'), async (req, re
     const before = await tx.menuCategory.findUnique({ where: { id } });
     if (!before) throw notFound('Category not found');
     if (before.version !== version) throw staleVersion(toCategoryDTO(before));
-    // Phase 2 note: once products exist, deletion of a category that still has
-    // products (or historical order lines) is refused; it must be deactivated instead.
+    const productCount = await tx.product.count({ where: { categoryId: id } });
+    if (productCount > 0) {
+      throw conflict(`"${before.name}" still has ${productCount} menu item(s). Move or delete them first, or hide the category instead.`);
+    }
     await tx.menuCategory.delete({ where: { id } });
     await audit(req, { action: 'category.delete', entityType: 'MenuCategory', entityId: id, before: toCategoryDTO(before) }, tx);
   });

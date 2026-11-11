@@ -2,6 +2,44 @@
 
 Newest first. Each entry: what changed, why, and what was verified.
 
+## 2026-11-11 — Phase 2: Menu items & inventory (complete, awaiting owner approval)
+
+**Owner decisions recorded:** Phase 1 approved. "Run offline & keep data stored online"
+approved as: café computer (works without internet) + automatic online copy (Phase 6) +
+offline order queue on tills, moved forward to Phase 3. ADR 0005 accepted; roadmap and
+OFFLINE.md updated. Number of order-taking tablets not yet given (does not affect Phase 2).
+
+**Built**
+- Migration `phase2_products_inventory`: suppliers, ingredients, append-only ingredient
+  ledger, products, photos, recipes, customisation options, append-only portion ledger,
+  production batches; CHECK constraints and append-only triggers.
+- Stock engine (`modules/inventory/stock.ts`): row-locked, deadlock-free, never negative,
+  weighted-average costing, exact unit conversion, idempotent by client request id.
+  Batch production consumes ingredients once and creates portions; the sale function for
+  the Phase 3 POS deducts portions (batch/ready-made) or recipe ingredients (made-to-order).
+- Screens: **Availability** board (all roles, live), **Menu items** (details, price,
+  stock type, station override, recipe with yield & wastage and live cost/margin,
+  customisation options, photo, portion stock), **Inventory** (ingredients, receive
+  deliveries with cost, waste/spoilage/correction/count, portions & ready-made, suppliers,
+  stock history), **Production** (choose item, portions stepper, requirements & shortages
+  preview, actual-amount overrides, recent batches). Dashboard stock KPIs are now live.
+- Costs/values hidden from roles without `reports.view`.
+- Demo seed (dev/demo only): 14 sample items, 21 ingredients with opening stock, 3 batches.
+
+**Problems found and fixed during the build**
+- Batch rows are append-only, so the first draft (create batch, then fill in cost) could not
+  work → batch id generated first, movements recorded, batch written once with final cost.
+- Accounting wording corrected in DATABASE.md: batch preparation moves value from raw to
+  finished stock; it becomes COGS only when portions are sold (verified: stock value is
+  unchanged by production).
+- Sidebar grew by two links → compacted further on short desktop screens.
+- `crypto.randomUUID` is unavailable on plain-HTTP LAN tablets → request ids fall back to
+  `crypto.getRandomValues`.
+
+**Verified:** see TEST_RESULTS.md (11 unit, 67 API, 24 browser tests; fresh clone; production build).
+
+**Next:** Phase 3 (POS, payments, VAT, offline order queue) after owner approval.
+
 ## 2026-11-11 — Phase 1: Foundation (complete, awaiting owner approval)
 
 **Environment inspected:** empty repository; Node 22.23, npm 10.9, PostgreSQL 16.15, Docker 29.9,

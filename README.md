@@ -5,7 +5,7 @@ stations, raw & finished-goods inventory, three-printer ticket routing, and fina
 Currency BDT (৳), timezone Asia/Dhaka. Runs in the browser on Windows PCs and touchscreen
 tablets, all connected to one central PostgreSQL database.
 
-**Current status: Phase 1 (Foundation) complete** — see [docs/ROADMAP.md](docs/ROADMAP.md)
+**Current status: Phase 2 (Menu items & inventory) complete** — see [docs/ROADMAP.md](docs/ROADMAP.md)
 and [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md).
 
 | Area | Status |
@@ -13,11 +13,12 @@ and [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md).
 | Secure login, 5 roles, permissions, audit log | ✅ Phase 1 |
 | Business settings (BDT, Asia/Dhaka), menu categories | ✅ Phase 1 |
 | Owner dashboard layout, live updates, OFFLINE indicator, PWA | ✅ Phase 1 |
-| Products, inventory, recipes, batch production | Phase 2 |
+| Menu items, recipes, options, photos, ingredients & suppliers, stock ledger, batch production, live availability | ✅ Phase 2 |
 | POS, payments (cash/card/bKash/Nagad), VAT, refunds | Phase 3 |
 | Kitchen/barista screens, three thermal printers | Phase 4 |
 | Purchases, expenses, profit reports, exports | Phase 5 |
-| Offline order queue & sync | Phase 6 |
+| Offline order queue on tills & sync | Phase 3 |
+| Automatic online copy & owner remote view | Phase 6 |
 
 ## Quick start (development)
 
@@ -37,7 +38,7 @@ cp apps/server/.env.example apps/server/.env      # edit DATABASE_URL if needed
 # 3. Create the schema and data
 npm run build:shared
 npm run db:deploy          # apply migrations
-npm run db:seed:demo       # DEMO ONLY: settings, 9 categories, one demo account per role
+npm run db:seed:demo       # DEMO ONLY: demo accounts, sample menu, ingredients & opening stock
 
 # 4. Run API (port 4000) + web app (port 5173)
 npm run dev

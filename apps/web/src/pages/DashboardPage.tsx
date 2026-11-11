@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { MENU_GROUP_LABELS, MENU_GROUPS, ROLE_LABELS, ROLES } from '@bitebrew/shared';
+import { formatQty, MENU_GROUP_LABELS, MENU_GROUPS, ROLE_LABELS, ROLES, type StockSummaryDTO } from '@bitebrew/shared';
 import { get } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Loading } from '../components/ui';
@@ -18,6 +18,7 @@ interface Summary {
   staffSignedIn: number;
   categories: { byGroup: Partial<Record<string, number>>; inactive: number };
   activeUsersByRole: Partial<Record<string, number>>;
+  stock: StockSummaryDTO;
 }
 
 type Period = 'day' | 'week' | 'month';
@@ -28,9 +29,6 @@ const PENDING_KPIS: { label: string; phase: number; note: string }[] = [
   { label: "Today's orders", phase: 3, note: 'Dine-in and takeaway' },
   { label: "Today's expenses", phase: 5, note: 'Operating expenses recorded today' },
   { label: 'Estimated profit', phase: 5, note: 'Revenue − COGS − expenses' },
-  { label: 'Current stock value', phase: 2, note: 'Raw + finished inventory at cost' },
-  { label: 'Low-stock alerts', phase: 2, note: 'Ingredients below minimum level' },
-  { label: 'Sold-out products', phase: 2, note: 'Finished portions at zero' },
   { label: 'Kitchen pending', phase: 4, note: 'Food tickets not yet served' },
   { label: 'Barista pending', phase: 4, note: 'Drink tickets not yet served' },
 ];
@@ -78,10 +76,29 @@ export function DashboardPage() {
       </div>
 
       <div className="alert info">
-        <b>Phase 1 foundation.</b> Sales, stock, expense and printer figures will appear here automatically once those modules are built — the
-        dashboard never shows estimated or sample figures in their place. Example of how money will display: <b className="num">{fmt.money(125050)}</b>,{' '}
-        <b className="num">{fmt.money(1_25_000_00)}</b>.
+        Sales, expense and printer figures appear here once those modules are built — the dashboard never shows estimated or sample
+        figures in their place. Stock figures below are live.
       </div>
+
+      {s && (
+        <section className="grid-kpi" aria-label="Stock">
+          <Link to="/inventory" className="card kpi accent" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <span className="label">Current stock value</span>
+            <span className="value num" data-testid="dash-stock-value">{fmt.money(s.stock.totalValueMinor)}</span>
+            <span className="foot">Ingredients {fmt.money(s.stock.ingredientValueMinor)} · portions {fmt.money(s.stock.finishedValueMinor)}</span>
+          </Link>
+          <Link to="/inventory" className="card kpi accent" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <span className="label">Low-stock alerts</span>
+            <span className="value num" data-testid="dash-low-stock" style={{ color: s.stock.lowStock.length ? 'var(--warning)' : undefined }}>{s.stock.lowStock.length}</span>
+            <span className="foot">{s.stock.lowStock.slice(0, 3).map((l) => l.name).join(', ') || 'All ingredients above minimum'}</span>
+          </Link>
+          <Link to="/availability" className="card kpi accent" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <span className="label">Sold-out products</span>
+            <span className="value num" data-testid="dash-sold-out" style={{ color: s.stock.soldOut.length ? 'var(--danger)' : undefined }}>{s.stock.soldOut.length}</span>
+            <span className="foot">{s.stock.soldOut.slice(0, 3).map((x) => x.name).join(', ') || 'Nothing sold out'}</span>
+          </Link>
+        </section>
+      )}
 
       <section className="grid-kpi" aria-label="Key figures">
         {PENDING_KPIS.map((k) => (
@@ -144,6 +161,16 @@ export function DashboardPage() {
             <div className="empty">No data yet — this panel fills in once the module is live.</div>
           </div>
         ))}
+        {s && s.stock.lowStock.length > 0 && (
+          <div className="card">
+            <div className="card-header"><h3>Low stock</h3><Link to="/inventory" className="btn sm secondary">Inventory</Link></div>
+            <div className="table-wrap"><table className="table"><tbody>
+              {s.stock.lowStock.map((l) => (
+                <tr key={l.id}><td>{l.name}</td><td className="num text-right"><b>{formatQty(l.onHand, l.displayUnit)}</b> <span className="muted small">/ min {formatQty(l.minLevel, l.displayUnit)}</span></td></tr>
+              ))}
+            </tbody></table></div>
+          </div>
+        )}
         {s && (
           <div className="card">
             <div className="card-header">

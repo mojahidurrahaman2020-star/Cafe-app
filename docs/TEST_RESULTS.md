@@ -1,5 +1,90 @@
 # Bite & Brew — Test Results
 
+## Phase 2 — Menu items & inventory (2026-11-11)
+
+Run on a **fresh clone** with a brand-new database, following the README (install →
+migrate → demo seed → `npm run dev`), then again against the **production build**.
+
+| Check | Result |
+|---|---|
+| Migrations on an empty database (3 migrations) | ✅ applied |
+| TypeScript (shared, server, web) | ✅ 0 errors |
+| Shared unit tests (now incl. unit conversions) | ✅ 11 / 11 |
+| API integration tests (Phase 1 + Phase 2) | ✅ 67 / 67 (43 + 24 new) |
+| Browser acceptance tests — dev server | ✅ 24 / 24 (18 + 6 new) |
+| Browser acceptance tests — production build | ✅ 24 / 24 |
+| Production dependency audit | ✅ 0 vulnerabilities |
+
+### Phase 2 acceptance criteria
+
+| Criterion | Evidence | Result |
+|---|---|---|
+| Prepare 20 Chicken Biriyani → recipe ingredients deducted | API "prepare 20 → … → 17": rice −3.15 kg (incl. 5 % wastage), chicken −4 kg, oil −400 mL, masala −100 g | ✅ |
+| System creates 20 finished portions; POS shows 20 | `/availability` returns 20; browser test shows 20 on a cashier tablet **live, without refresh** | ✅ |
+| Customer buys 3 → finished stock 17 | Sale function (used by the Phase 3 POS) → 17; ledger PRODUCED +20, SOLD −3 | ✅ |
+| Ingredients **not** deducted again at sale | Every ingredient balance identical before/after the sale | ✅ |
+| Made-to-order items deduct recipe at sale | Latte: milk, beans, cup (+ chosen oat-milk option) deducted; availability limited by the scarcest ingredient | ✅ |
+| Unit conversion (kg↔g, L↔mL, dozen↔pcs) | Shared unit tests + API receive in kg / mL; wrong-dimension units refused | ✅ |
+| Recipe yields, wastage | Yield-10 recipe scaled to 20/60 portions; wastage % applied | ✅ |
+| Wastage, spoilage, adjustments, counts | All four recorded with signed quantity, value and reason; correction requires a reason; cannot go below zero | ✅ |
+| Never sell the last portion twice | Two simultaneous sales of the last portion → exactly one succeeds | ✅ |
+| Two staff preparing at once cannot overdraw stock | Two simultaneous 30-portion batches (each needs 6 of 10 kg chicken) → one succeeds, one refused | ✅ |
+| No duplicate submissions | Double-tapped delivery and double-tapped batch each recorded once | ✅ |
+| Complete audit trail | Append-only ledgers (DB triggers block UPDATE/DELETE); audit log for receipts, adjustments, batches, price/recipe/option changes | ✅ |
+| Owner manages menu without a developer | Browser test creates a batch item, sets price and recipe, records production — all through the UI | ✅ |
+| Stock per category (“how many orders we can take”) | Availability board per category: portions ready, items available / sold out, per-item counts | ✅ |
+| Dashboard stock KPIs | Current stock value, low-stock alerts, sold-out products — live (value unchanged by production: raw → finished) | ✅ |
+| Role rules | Cashier: availability only, no costs; kitchen: can record batches, cannot receive or adjust, sees no costs | ✅ |
+
+### Phase 2 browser tests
+
+| | Test |
+|---|---|
+| ✓ | P2 inventory: add an ingredient, receive a delivery in kg, record waste |
+| ✓ | P2 menu item: create a batch item and its recipe through the UI |
+| ✓ | P2 production: prepare 20 portions → ingredients deducted once → 20 available everywhere (live) |
+| ✓ | P2 not enough stock: production is refused with the shortage shown |
+| ✓ | P2 roles: kitchen can record production; cashier sees availability but not inventory or costs |
+| ✓ | P2 dashboard shows live stock value, low-stock and sold-out counts |
+
+### Phase 2 API tests
+
+| | Test |
+|---|---|
+| ✓ | units & receiving stock — stores in base units and converts kg→g, L→mL |
+| ✓ | units & receiving stock — rejects a unit from the wrong dimension |
+| ✓ | units & receiving stock — keeps a weighted-average cost across deliveries |
+| ✓ | units & receiving stock — a double-tapped delivery is recorded once |
+| ✓ | batch production — the Chicken Biriyani workflow — prepare 20 → deduct recipe once → 20 available → sell 3 → 17, raw stock untouched by the sale |
+| ✓ | batch production — the Chicken Biriyani workflow — refuses a batch when ingredients are short, lists every shortage, and changes nothing |
+| ✓ | batch production — the Chicken Biriyani workflow — records actual amounts when they differ from the recipe |
+| ✓ | batch production — the Chicken Biriyani workflow — a double-tapped batch is recorded once |
+| ✓ | batch production — the Chicken Biriyani workflow — two kitchens preparing at once cannot overdraw the same ingredient |
+| ✓ | selling — atomic stock (groundwork for the Phase 3 POS) — two tills selling the last portion at the same moment: exactly one succeeds |
+| ✓ | selling — atomic stock (groundwork for the Phase 3 POS) — made-to-order items deduct recipe ingredients at sale, including chosen options |
+| ✓ | selling — atomic stock (groundwork for the Phase 3 POS) — ready-made items are received in units with cost, then sold |
+| ✓ | waste, spoilage, corrections and counts — records each kind of adjustment with value and reason |
+| ✓ | waste, spoilage, corrections and counts — finished portions can be wasted or counted |
+| ✓ | waste, spoilage, corrections and counts — stock ledgers are append-only in the database |
+| ✓ | menu items — create, edit price (audited), hide, and refuse deletion once there is stock history |
+| ✓ | menu items — refuses to change stock mode while portions are on hand |
+| ✓ | menu items — a category with menu items cannot be deleted |
+| ✓ | menu items — drinks route to the barista station; a product can override its category |
+| ✓ | menu items — stores and serves a product photo |
+| ✓ | menu items — recipe units must match the ingredient |
+| ✓ | permissions & dashboard — cashier sees availability but not costs, and cannot change menu or stock |
+| ✓ | permissions & dashboard — kitchen can prepare batches and view stock, but cannot receive deliveries or see values |
+| ✓ | permissions & dashboard — dashboard shows real stock value, low-stock alerts and sold-out items |
+
+### Not tested in Phase 2
+- Selling through a real POS screen (the POS is Phase 3; the sale function it will use is tested directly).
+- Very large menus/ingredient lists for performance (functional tests only).
+- Image upload from a physical tablet camera (tested with generated images in the browser).
+
+---
+
+## Phase 1 — Foundation (2026-11-11)
+
 All results below come from real runs in the development container on **2026-11-11**
 (Node 22.23, PostgreSQL 16.15, Chromium via Playwright 1.63). Nothing is assumed.
 Re-run them with the commands shown.

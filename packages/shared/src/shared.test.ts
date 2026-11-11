@@ -67,3 +67,23 @@ describe('roles', () => {
     expect(canManageRole('CASHIER', 'BARISTA')).toBe(false);
   });
 });
+
+import { formatQty, fromBase, toBase, unitsFor } from './index.js';
+describe('units', () => {
+  it('converts kg↔g and L↔mL exactly', () => {
+    expect(toBase(2.5, 'kg', 'MASS')).toBe(2500);
+    expect(toBase(0.125, 'l', 'VOLUME')).toBe(125);
+    expect(toBase(2, 'dozen', 'COUNT')).toBe(24);
+    expect(fromBase(1250, 'kg')).toBe(1.25);
+    expect(fromBase(330, 'l')).toBe(0.33);
+    expect(toBase(0.1 + 0.2, 'kg', 'MASS')).toBe(300); // float noise removed
+  });
+  it('refuses cross-dimension conversions', () => {
+    expect(() => toBase(1, 'kg', 'VOLUME')).toThrow();
+    expect(unitsFor('VOLUME')).toEqual(['ml', 'l']);
+  });
+  it('formats quantities', () => {
+    expect(formatQty(12500, 'kg')).toBe('12.5 kg');
+    expect(formatQty(1500, 'ml')).toBe('1,500 mL');
+  });
+});

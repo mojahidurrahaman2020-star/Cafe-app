@@ -1,5 +1,10 @@
 # Bite & Brew — Offline Strategy
 
+> **Owner decision (2026-11-11):** the app must keep running offline and keep its data stored
+> online whenever the internet is available. Agreed design: café computer as the primary
+> system (works with no internet) → automatic online copy when connected (Phase 6) →
+> offline order queue on tills that lose Wi-Fi (Phase 3).
+
 ## 1. Two very different kinds of "offline"
 
 | Situation | How likely | Effect with the recommended **on-premises server** |
@@ -27,7 +32,7 @@ instead of trying to engineer around it.
 
 Verified by the browser test "OFFLINE status is clearly displayed…" (see TEST_RESULTS.md).
 
-## 3. Controlled offline ordering (planned, Phase 6)
+## 3. Controlled offline ordering (planned, Phase 3 — moved forward from Phase 6)
 
 Only for devices the owner marks `offline_orders_allowed` (normally the main till).
 
@@ -64,3 +69,12 @@ Only for devices the owner marks `offline_orders_allowed` (normally the main til
   app will warn when unsynced orders exist and block sign-out until they sync.
 - Price or menu changes made while a device is offline reach it only after reconnecting;
   orders keep the price shown at the time of sale.
+
+## 5. Online copy (planned, Phase 6)
+
+- The café server pushes changes to an online server whenever the internet is up
+  (append-only ledgers and audit log make this a one-way, resumable copy).
+- If the internet is down for hours or days, the copy simply catches up later; nothing
+  in the café waits for it.
+- The online copy powers the owner's remote dashboard (read-only) and serves as the
+  off-site backup in addition to the daily `pg_dump` files.

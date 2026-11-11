@@ -35,25 +35,40 @@ Errors: `{ "error": { "code", "message", "details?" } }`.
 | `PATCH /users/:id` | `users.manage` + rank | Name / role / active / password reset + `version`; last active owner protected |
 | `GET /audit?limit&before&entityType` | `audit.view` | Newest first, keyset pagination |
 | `GET /dashboard/summary` | `dashboard.view` | Business date (Dhaka), DB status, connected devices, staff signed in, category counts |
-| `WS /ws` | signed in (cookie, origin-checked) | Server push: `settings.changed`, `categories.changed`, `users.changed` |
+| `WS /ws` | signed in (cookie, origin-checked) | Server push: `settings.changed`, `categories.changed`, `users.changed`, `products.changed`, `inventory.changed` |
+
+## Implemented (Phase 2)
+
+Write endpoints that change stock take a client `requestId` (UUID) in the body; repeating it
+returns the original result with `replayed: true` (HTTP 200) instead of recording twice.
+Stock shortages return **409 `INSUFFICIENT_STOCK`** with `details.shortages[]`.
+Cost and value fields are zeroed/null for roles without `reports.view`.
+
+| Method & path | Permission | Purpose |
+|---|---|---|
+| `GET /suppliers` · `POST /suppliers` · `PATCH /suppliers/:id` | `inventory.view` / `purchases.manage` | Suppliers |
+| `GET /ingredients[?includeInactive]` | `inventory.view` | On hand, min level, low flag, avg cost, value |
+| `POST /ingredients` · `PATCH /ingredients/:id` · `DELETE /ingredients/:id` | `inventory.adjust` | Delete refused if it has history or is used in a recipe |
+| `POST /ingredients/:id/receive` | `purchases.manage` | Delivery: quantity + unit + total paid → weighted-average cost |
+| `POST /ingredients/:id/adjust` | `inventory.adjust` | `WASTE` / `SPOILAGE` / `ADJUSTMENT` (reason required) / `COUNT` |
+| `GET /stock/movements?kind&itemId&limit` | `inventory.view` | Combined ledger, newest first |
+| `GET /stock/summary` | `inventory.view` | Stock value, low-stock list, sold-out list |
+| `GET /products[?includeInactive]` · `GET /products/:id` | `menu.view` | Includes availability, cost, recipe, options |
+| `POST /products` · `PATCH /products/:id` · `DELETE /products/:id` | `menu.manage` | Delete refused once stock history exists; stock mode can't change while portions are on hand |
+| `PUT /products/:id/recipe` | `menu.manage` | `{ recipeYield, lines[{ingredientId, quantity, unit, wastagePct}], version }` |
+| `PUT /products/:id/modifiers` | `menu.manage` | Option groups with price deltas and optional extra ingredient |
+| `PUT /products/:id/image` · `DELETE …/image` · `GET …/image` | `menu.manage` / `menu.view` | Photo (data URL ≤ 1 MB, ETag cached) |
+| `POST /products/:id/stock/adjust` | `inventory.adjust` | Portion waste / spoilage / correction / count |
+| `POST /products/:id/stock/receive` | `purchases.manage` | Ready-made units with cost |
+| `GET /availability` | `menu.view` | Per category: items available / sold out, portions ready, per-item counts |
+| `GET /production/preview?productId&portions` | `production.manage` | Requirements, shortages, cost, max portions possible |
+| `POST /production/batches` · `GET /production/batches` | `production.manage` | Record a batch (optional actual-amount overrides) |
 
 ## Planned
 
 All state-changing POS endpoints accept an **`Idempotency-Key`** header (UUID generated on
 the device when the cashier presses the button). Re-sending the same key returns the
 original result instead of creating a second order/payment.
-
-### Phase 2 — Menu items & inventory
-| Endpoint | Permission |
-|---|---|
-| `GET/POST/PATCH/DELETE /products` (+ image upload `POST /products/:id/image`) | `menu.view` / `menu.manage` |
-| `GET /products/availability` — portions/orders that can still be taken, per product & category | `menu.view` |
-| `GET/POST/PATCH /units`, `/suppliers`, `/ingredients` | `inventory.view` / `inventory.adjust` |
-| `GET /ingredients/:id/movements` | `inventory.view` |
-| `POST /stock/adjustments` (waste, spoilage, correction, count) | `inventory.adjust` |
-| `GET/PUT /products/:id/recipe` | `menu.manage` |
-| `POST /production-batches` (prepare N portions), `GET /production-batches` | `production.manage` |
-| `GET /stock/low`, `GET /stock/valuation` | `inventory.view` |
 
 ### Phase 3 — POS & payments
 | Endpoint | Permission |

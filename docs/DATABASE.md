@@ -12,8 +12,8 @@ PostgreSQL 16, managed through Prisma migrations (`apps/server/prisma`).
 
 ## 1. Entity relationship diagram (target model)
 
-Tables in **Phase 1 (built)**: `users`, `sessions`, `business_settings`, `menu_categories`, `audit_logs`.
-All others are designed here and are added by later migrations.
+Built: **Phase 1** `users`, `sessions`, `business_settings`, `menu_categories`, `audit_logs`; **Phase 2** `suppliers`, `ingredients`, `stock_movements`, `products`, `product_images`, `recipe_lines`, `modifier_groups`, `modifiers`, `finished_movements`, `production_batches`.
+The rest are designed here and are added by later migrations.
 
 ```mermaid
 erDiagram
@@ -73,13 +73,31 @@ See `apps/server/prisma/schema.prisma` and the two migrations:
 | `menu_categories` | `name`, `normalized_name` UNIQUE (case-insensitive uniqueness), `group` FOOD/DRINKS/DESSERTS, `station` KITCHEN/BARISTA, `sort_order`, `is_active`, `version` | `station` routes tickets to printer 2 or 3 |
 | `audit_logs` | `occurred_at`, `actor_id`, `action`, `entity_type`, `entity_id`, `before` JSONB, `after` JSONB, `ip_address`, `user_agent` | Secrets are scrubbed before writing |
 
-## 3. Planned schema (Phases 2–5)
+## 3. Phase 2 schema (implemented)
 
-### Inventory (Phase 2)
+Migration `…_phase2_products_inventory` (+ hand-written guards in the same file):
+CHECK constraints (stock ≥ 0, prices ≥ 0, recipe quantity > 0, wastage 0–99.99 %, unit must
+match dimension, modifier min ≤ max) and **append-only triggers** on `stock_movements`,
+`finished_movements` and `production_batches`.
+
+Differences from the original plan, decided while building:
+- **Units** are a fixed list in code (g, kg, mL, L, pcs, dozen) instead of a `units` table —
+  conversions stay exact and cannot be mis-edited. Ingredients store a `dimension` and a
+  `display_unit`; quantities are kept in the base unit.
+- **Finished stock** lives on `products` (`portions_on_hand`, `portion_cost_minor`) instead of
+  a separate `finished_stock` table; it changes only through `finished_movements`, under a row lock.
+- **Product photos** are stored in the database (`product_images`, resized to ≤ 640 px in the
+  browser) so the daily backup contains them — no separate file storage to back up.
+- **Idempotency**: `request_id` UNIQUE on both ledgers and on `production_batches`; a
+  double-tapped "Record" or "Receive" returns the first result.
+- Stock is changed only by `apps/server/src/modules/inventory/stock.ts`, which locks rows
+  (`SELECT … FOR UPDATE`, products then ingredients, ordered by id — deadlock-free).
+
+### Inventory (as designed — see notes above for what changed)
 
 | Table | Columns (abridged) | Rules |
 |---|---|---|
-| `units` | `code` (g, kg, mL, L, pcs, dozen…), `dimension` MASS/VOLUME/COUNT, `factor_to_base` NUMERIC | kg→g = 1000, L→mL = 1000. Conversions only within one dimension |
+| units *(implemented in code)* | g, kg, mL, L, pcs, dozen; `dimension` MASS/VOLUME/COUNT | kg→g = 1000, L→mL = 1000, dozen→pcs = 12. Conversions only within one dimension |
 | `suppliers` | name, phone, address, notes, `is_active` | |
 | `ingredients` | name, `dimension`, `base_unit`, `display_unit`, `on_hand_base` NUMERIC(14,3) (cached), `avg_cost_minor_per_base` NUMERIC(14,4), `min_level_base`, `default_supplier_id`, `is_packaging`, `version` | `on_hand_base` is only changed in the same transaction that inserts a `stock_movements` row; CHECK `on_hand_base >= 0` unless an override movement is recorded |
 | `stock_movements` | `ingredient_id`, `type` (PURCHASE, PRODUCTION_CONSUME, SALE_CONSUME, WASTE, SPOILAGE, ADJUSTMENT, COUNT_CORRECTION, RETURN_TO_SUPPLIER, SYNC_CONFLICT), `qty_delta_base`, `unit_cost_minor`, `value_minor`, `balance_after_base`, `ref_type`/`ref_id`, `reason`, `actor_id`, `device_id`, `occurred_at` | Append-only ledger. PRODUCTION_CONSUME converts raw stock into finished-goods stock (still an asset); SALE_CONSUME is COGS |

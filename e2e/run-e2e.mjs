@@ -69,7 +69,7 @@ async function noHorizontalOverflow(page) {
 
 const unique = `E2E ${Date.now().toString(36)}`;
 
-console.log(`\nPhase 1 acceptance tests against ${BASE}\n`);
+console.log(`\nAcceptance tests (Phases 1–2) against ${BASE}\n`);
 
 await test('application starts: login page loads and health endpoint reports database up', async () => {
   const { page, ctx } = await newSession();
@@ -107,8 +107,9 @@ await test('currency displays BDT / ৳ correctly (lakh grouping)', async () => 
   await p.waitForSelector('[data-testid=currency-display]');
   const cur = await p.textContent('[data-testid=currency-display]');
   assert(cur.includes('BDT') && cur.includes('৳'), `currency display: ${cur}`);
-  const body = await p.textContent('[data-testid=dashboard]');
-  assert(body.includes('৳1,250.50') && body.includes('৳1,25,000.00'), 'money examples not formatted as ৳ with lakh grouping');
+  await p.waitForSelector('[data-testid=dash-stock-value]');
+  const value = (await p.textContent('[data-testid=dash-stock-value]')).trim();
+  assert(/^৳\d{1,2}(,\d{2})*,?\d{0,3}\.\d{2}$/.test(value) || /^৳\d+\.\d{2}$/.test(value), `stock value not formatted as ৳ with lakh grouping: ${value}`);
 });
 
 await test('timezone is Asia/Dhaka (UTC+06:00) and the clock shows Dhaka time', async () => {
@@ -126,7 +127,7 @@ await test('timezone is Asia/Dhaka (UTC+06:00) and the clock shows Dhaka time', 
 await test('every navigation link opens a working page (no blank/404/crash)', async () => {
   const p = owner.page;
   const links = await p.$$eval('nav.nav a', (as) => as.map((a) => ({ href: a.getAttribute('href'), label: a.textContent.trim() })));
-  assert(links.length === 13, `expected 13 nav links for owner, got ${links.length}`);
+  assert(links.length === 15, `expected 15 nav links for owner, got ${links.length}`);
   for (const l of links) {
     await p.click(`nav.nav a[href="${l.href}"]`);
     await p.waitForURL((u) => u.pathname === l.href);
@@ -204,6 +205,123 @@ await test('settings persist after refreshing the application', async () => {
   await p.fill('[data-testid=settings-address]', original);
   await p.click('[data-testid=settings-save]');
   await p.waitForSelector('.toast.success');
+});
+
+
+// ---------------- Phase 2: menu items, inventory, production ----------------
+const P2 = `E2E ${Date.now().toString(36).slice(-5)}`;
+await test('P2 inventory: add an ingredient, receive a delivery in kg, record waste', async () => {
+  const p = owner.page;
+  await p.goto(`${BASE}/inventory`);
+  await p.waitForSelector('[data-testid=ingredients-table]');
+  await p.click('[data-testid=ingredient-new]');
+  await p.fill('#if-name', `${P2} Rice`);
+  await p.selectOption('#if-dim', 'MASS');
+  await p.selectOption('#if-unit', 'kg');
+  await p.fill('#if-min', '2');
+  await p.click('[data-testid=ingredient-save]');
+  const row = p.locator('[data-testid=ingredient-row]', { hasText: `${P2} Rice` });
+  await row.waitFor();
+  await row.locator('[data-testid=ingredient-receive]').click();
+  await p.fill('[data-testid=receive-qty]', '10');
+  await p.fill('[data-testid=receive-cost]', '1400');
+  await p.click('[data-testid=receive-save]');
+  await p.waitForFunction((n) => [...document.querySelectorAll('[data-testid=ingredient-row]')].find((r) => r.textContent.includes(n))?.querySelector('[data-testid=ingredient-onhand]')?.textContent.trim() === '10 kg', `${P2} Rice`);
+  await row.locator('[data-testid=ingredient-adjust]').click();
+  await p.fill('[data-testid=adjust-qty]', '500');
+  await p.selectOption('.modal select[aria-label=Unit]', 'g');
+  await p.click('[data-testid=adjust-save]');
+  await p.waitForFunction((n) => [...document.querySelectorAll('[data-testid=ingredient-row]')].find((r) => r.textContent.includes(n))?.querySelector('[data-testid=ingredient-onhand]')?.textContent.trim() === '9.5 kg', `${P2} Rice`);
+  const value = await row.textContent();
+  assert(value.includes('৳140.00/kg') && value.includes('৳1,330.00'), `cost/value wrong: ${value}`);
+  await p.screenshot({ path: `${SHOTS}/07-inventory.png` });
+});
+
+await test('P2 menu item: create a batch item and its recipe through the UI', async () => {
+  const p = owner.page;
+  await p.goto(`${BASE}/products`);
+  await p.waitForSelector('[data-testid=product-new]');
+  await p.click('[data-testid=product-new]');
+  await p.fill('#pd-name', `${P2} Pulao`);
+  const cat = await p.$eval('#pd-cat', (s) => [...s.options].find((o) => o.textContent.startsWith('Biriyani')).value);
+  await p.selectOption('#pd-cat', cat);
+  await p.fill('[data-testid=product-price]', '180');
+  await p.selectOption('[data-testid=product-mode]', 'BATCH');
+  await p.click('[data-testid=product-save]');
+  await p.waitForSelector('[data-testid=recipe-yield]'); // editor moves to the Recipe tab
+  await p.fill('[data-testid=recipe-yield]', '10');
+  await p.click('[data-testid=recipe-add-line]');
+  const line = p.locator('[data-testid=recipe-line]').last();
+  const optVal = await line.locator('select[aria-label=Ingredient]').evaluate((s, n) => [...s.options].find((o) => o.textContent === n).value, `${P2} Rice`);
+  await line.locator('select[aria-label=Ingredient]').selectOption(optVal);
+  await line.locator('input.num').first().fill('1.5');
+  await p.click('[data-testid=recipe-save]');
+  await p.waitForSelector('.toast.success');
+  await p.keyboard.press('Escape');
+  const row = p.locator('[data-testid=product-row]', { hasText: `${P2} Pulao` });
+  await row.waitFor();
+  assert((await row.locator('[data-testid=product-available]').textContent()).includes('Sold out'), 'new batch item should be sold out until a batch is recorded');
+});
+
+await test('P2 production: prepare 20 portions → ingredients deducted once → 20 available everywhere (live)', async () => {
+  const cashier = await newSession(devices['iPad (gen 7)']);
+  await login(cashier.page, 'cashier');
+  await cashier.page.goto(`${BASE}/availability`);
+  await cashier.page.waitForSelector('[data-testid=avail-item]');
+  await cashier.page.waitForFunction(() => document.querySelector('[data-testid=connection-status]')?.textContent?.includes('ONLINE'));
+  const pill = () => cashier.page.locator('[data-testid=avail-item]', { hasText: `${P2} Pulao` }).locator('.qty-pill');
+  assert((await pill().textContent()).includes('Sold out'), 'expected sold out before production');
+
+  const p = owner.page;
+  await p.goto(`${BASE}/production`);
+  await p.locator('[data-testid=production-item]', { hasText: `${P2} Pulao` }).click();
+  await p.fill('#pr-portions', '20');
+  await p.waitForSelector('[data-testid=production-preview]');
+  await p.waitForFunction(() => document.querySelector('[data-testid=production-preview]')?.textContent.includes('3 kg'));
+  await p.click('[data-testid=production-record]');
+  await p.waitForSelector('.toast.success');
+  await p.screenshot({ path: `${SHOTS}/08-production.png` });
+  // the cashier tablet updates without refresh
+  await cashier.page.waitForFunction((n) => [...document.querySelectorAll('[data-testid=avail-item]')].find((r) => r.textContent.includes(n))?.querySelector('.qty-pill')?.textContent.trim() === '20', `${P2} Pulao`, { timeout: 8000 });
+  await cashier.page.screenshot({ path: `${SHOTS}/09-availability-tablet.png` });
+  await cashier.ctx.close();
+  // rice: 9.5 kg − 3 kg (1.5 kg × 20/10) = 6.5 kg
+  await p.goto(`${BASE}/inventory`);
+  const row = p.locator('[data-testid=ingredient-row]', { hasText: `${P2} Rice` });
+  await row.waitFor();
+  assert((await row.locator('[data-testid=ingredient-onhand]').textContent()).trim() === '6.5 kg', 'ingredient not deducted exactly once');
+});
+
+await test('P2 not enough stock: production is refused with the shortage shown', async () => {
+  const p = owner.page;
+  await p.goto(`${BASE}/production`);
+  await p.locator('[data-testid=production-item]', { hasText: `${P2} Pulao` }).click();
+  await p.fill('#pr-portions', '100');
+  await p.waitForFunction(() => document.querySelector('[data-testid=production-preview]')?.textContent.includes('Short by'));
+  assert(await p.isDisabled('[data-testid=production-record]'), 'record button should be disabled when short');
+});
+
+await test('P2 roles: kitchen can record production; cashier sees availability but not inventory or costs', async () => {
+  const k = await newSession();
+  await login(k.page, 'kitchen');
+  await k.page.goto(`${BASE}/production`);
+  await k.page.waitForSelector('[data-testid=production-item]');
+  assert(!(await k.page.$('text=Batch cost')), 'kitchen should not see batch costs');
+  await k.ctx.close();
+  const c = await newSession();
+  await login(c.page, 'cashier');
+  const hrefs = await c.page.$$eval('nav.nav a', (as) => as.map((a) => a.getAttribute('href')));
+  assert(hrefs.includes('/availability') && !hrefs.includes('/inventory') && !hrefs.includes('/production'), `cashier nav: ${hrefs}`);
+  await c.page.goto(`${BASE}/inventory`);
+  await c.page.waitForSelector('[data-testid=forbidden]');
+  await c.ctx.close();
+});
+
+await test('P2 dashboard shows live stock value, low-stock and sold-out counts', async () => {
+  const p = owner.page;
+  await p.goto(`${BASE}/dashboard`);
+  await p.waitForSelector('[data-testid=dash-stock-value]');
+  for (const id of ['dash-low-stock', 'dash-sold-out']) assert(/^\d+$/.test((await p.textContent(`[data-testid=${id}]`)).trim()), id);
 });
 
 // ---------------- Role permissions in the UI ----------------

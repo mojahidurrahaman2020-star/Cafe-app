@@ -7,7 +7,11 @@ import { AppShell } from './layout/AppShell';
 import { AccountPage } from './pages/AccountPage';
 import { AuditPage } from './pages/AuditPage';
 import { CategoriesPage } from './pages/CategoriesPage';
+import { AvailabilityPage } from './pages/AvailabilityPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { InventoryPage } from './pages/InventoryPage';
+import { ProductionPage } from './pages/ProductionPage';
+import { ProductsPage } from './pages/ProductsPage';
 import { LoginPage } from './pages/LoginPage';
 import { PlannedModulePage } from './pages/PlannedModulePage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -55,8 +59,10 @@ export function App() {
         <Route path="pos" element={<Guard permission="pos.use"><PlannedModulePage moduleKey="pos" /></Guard>} />
         <Route path="kitchen" element={<Guard permission="kitchen.view"><PlannedModulePage moduleKey="kitchen" /></Guard>} />
         <Route path="barista" element={<Guard permission="barista.view"><PlannedModulePage moduleKey="barista" /></Guard>} />
-        <Route path="inventory" element={<Guard permission="inventory.view"><PlannedModulePage moduleKey="inventory" /></Guard>} />
-        <Route path="production" element={<Guard permission="production.manage"><PlannedModulePage moduleKey="production" /></Guard>} />
+        <Route path="availability" element={<Guard permission="menu.view"><AvailabilityPage /></Guard>} />
+        <Route path="products" element={<Guard permission="menu.view"><ProductsPage /></Guard>} />
+        <Route path="inventory" element={<Guard permission="inventory.view"><InventoryPage /></Guard>} />
+        <Route path="production" element={<Guard permission="production.manage"><ProductionPage /></Guard>} />
         <Route path="expenses" element={<Guard permission="expenses.manage"><PlannedModulePage moduleKey="expenses" /></Guard>} />
         <Route path="reports" element={<Guard permission="reports.view"><PlannedModulePage moduleKey="reports" /></Guard>} />
         <Route path="printers" element={<Guard permission="printers.manage"><PlannedModulePage moduleKey="printers" /></Guard>} />

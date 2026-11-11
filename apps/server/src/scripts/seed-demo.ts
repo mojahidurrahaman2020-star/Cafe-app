@@ -7,6 +7,7 @@ import { env } from '../config/env.js';
 import { hashPassword } from '../lib/password.js';
 import { prisma } from '../lib/prisma.js';
 import { seedBase } from './seed.js';
+import { seedDemoMenu } from './demo-menu.js';
 import type { Role } from '@bitebrew/shared';
 
 export const DEMO_PASSWORD = 'demo-pass-2027';
@@ -32,6 +33,9 @@ async function main() {
       create: { ...u, passwordHash: hash },
     });
   }
+  const owner = await prisma.user.findUnique({ where: { username: 'owner' } });
+  const menu = await seedDemoMenu(owner?.id ?? null);
+  console.log(menu.skipped ? 'DEMO menu: products already exist — left untouched.' : `DEMO menu: ${menu.products} items, ${menu.ingredients} ingredients with opening stock, 3 morning batches.`);
   console.log(`DEMO accounts ready (APP_ENV=${env.APP_ENV}). Password for all: ${DEMO_PASSWORD}`);
   for (const u of DEMO_USERS) console.log(`  ${u.role.padEnd(8)} ${u.username}`);
 }

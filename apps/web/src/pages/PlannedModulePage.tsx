@@ -34,23 +34,8 @@ export const PLANNED: Record<string, PlannedModule> = {
     summary: 'Live queue of drinks tickets, mirrored on the barista thermal printer.',
     features: ['Drinks-only tickets (coffee, tea, beverages)', 'Customisations shown prominently', 'Pending count and ticket age'],
   },
-  inventory: {
-    title: 'Inventory',
-    phase: 2,
-    summary: 'Raw ingredients and finished portions, with full stock-movement history.',
-    features: [
-      'Ingredients with units (kg↔g, L↔mL), cost, supplier, minimum level',
-      'Finished-product stock (e.g. 20 Biriyani portions → 17 after selling 3)',
-      'Low-stock and sold-out alerts',
-      'Wastage, spoilage and stock adjustments with reasons',
-    ],
-  },
-  production: {
-    title: 'Production / batch preparation',
-    phase: 2,
-    summary: 'Record batch cooking: consume recipe ingredients once and create finished portions.',
-    features: ['Recipes with configurable yields', 'Batch prep deducts raw stock exactly once', 'Made-to-order items deduct ingredients at sale instead'],
-  },
+
+
   expenses: {
     title: 'Purchases & expenses',
     phase: 5,

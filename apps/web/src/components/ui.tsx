@@ -8,12 +8,14 @@ export function Modal({
   children,
   footer,
   labelledBy = 'modal-title',
+  wide,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
   labelledBy?: string;
+  wide?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -24,7 +26,7 @@ export function Modal({
   }, [onClose]);
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby={labelledBy} ref={ref}>
+      <div className={`modal${wide ? ' wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby={labelledBy} ref={ref}>
         <div className="modal-head row">
           <h2 id={labelledBy}>{title}</h2>
           <span className="spacer" />

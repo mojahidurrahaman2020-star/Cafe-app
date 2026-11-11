@@ -76,7 +76,9 @@ export type RealtimeEvent =
   | { type: 'hello'; serverTime: string }
   | { type: 'settings.changed'; version: number }
   | { type: 'categories.changed' }
-  | { type: 'users.changed' };
+  | { type: 'users.changed' }
+  | { type: 'products.changed' }
+  | { type: 'inventory.changed' };
 
 export interface ApiErrorBody {
   error: { code: string; message: string; details?: unknown };

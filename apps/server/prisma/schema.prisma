@@ -10,9 +10,9 @@
 //   through new migrations (see docs/DATABASE.md for the full planned model).
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
-  moduleFormat = "esm"
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
   importFileExtension = "js"
 }
 
@@ -124,22 +124,24 @@ model MenuCategory {
   createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  products Product[]
+
   @@index([group, sortOrder])
   @@map("menu_categories")
 }
 
 /// Append-only record of sensitive business changes. Never updated or deleted by the app.
 model AuditLog {
-  id          BigInt   @id @default(autoincrement())
-  occurredAt  DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
-  actorId     String?  @map("actor_id") @db.Uuid
-  action      String   @db.VarChar(80)
-  entityType  String   @map("entity_type") @db.VarChar(60)
-  entityId    String?  @map("entity_id") @db.VarChar(64)
-  before      Json?
-  after       Json?
-  ipAddress   String?  @map("ip_address") @db.VarChar(64)
-  userAgent   String?  @map("user_agent") @db.VarChar(300)
+  id         BigInt   @id @default(autoincrement())
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String   @db.VarChar(80)
+  entityType String   @map("entity_type") @db.VarChar(60)
+  entityId   String?  @map("entity_id") @db.VarChar(64)
+  before     Json?
+  after      Json?
+  ipAddress  String?  @map("ip_address") @db.VarChar(64)
+  userAgent  String?  @map("user_agent") @db.VarChar(300)
 
   actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
@@ -147,4 +149,276 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([actorId])
   @@map("audit_logs")
+}
+
+// ───────────────────────────── Phase 2: products & inventory ─────────────────────────────
+//
+// Quantities of ingredients are NUMERIC(14,3) in the ingredient's BASE unit:
+//   MASS → grams, VOLUME → millilitres, COUNT → pieces.
+// Finished goods are counted in whole portions (INT).
+// Unit costs are paisa per base unit / per portion, NUMERIC(14,4) (fractions of a paisa
+// matter for spices: ৳600/kg = 60 paisa per gram).
+// Movement values are whole paisa (BIGINT). Stock levels change ONLY together with an
+// append-only movement row, inside one transaction, under a row lock.
+
+enum Dimension {
+  MASS
+  VOLUME
+  COUNT
+}
+
+/// How a product's stock works.
+enum StockMode {
+  /// Cooked in batches (Tehari, Biriyani, Khichuri): ingredients are consumed at
+  /// preparation; the POS sells finished portions.
+  BATCH
+  /// Made when ordered (coffee, burgers): recipe ingredients are deducted at sale.
+  MADE_TO_ORDER
+  /// Bought ready to sell (bottled drinks): counted in units received and sold.
+  RESALE
+  /// Not stock-controlled.
+  UNTRACKED
+}
+
+enum IngredientMovementType {
+  OPENING
+  RECEIVE
+  PRODUCTION_CONSUME
+  SALE_CONSUME
+  SALE_REVERSAL
+  WASTE
+  SPOILAGE
+  ADJUSTMENT
+  COUNT
+}
+
+enum FinishedMovementType {
+  OPENING
+  PRODUCED
+  RECEIVE
+  SOLD
+  SALE_REVERSAL
+  WASTE
+  SPOILAGE
+  ADJUSTMENT
+  COUNT
+}
+
+model Supplier {
+  id             String   @id @default(uuid()) @db.Uuid
+  name           String   @db.VarChar(100)
+  normalizedName String   @unique @map("normalized_name") @db.VarChar(100)
+  phone          String   @default("") @db.VarChar(40)
+  address        String   @default("") @db.VarChar(300)
+  notes          String   @default("") @db.VarChar(500)
+  isActive       Boolean  @default(true) @map("is_active")
+  version        Int      @default(0)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  ingredients Ingredient[]
+  movements   StockMovement[]
+
+  @@map("suppliers")
+}
+
+model Ingredient {
+  id             String    @id @default(uuid()) @db.Uuid
+  name           String    @db.VarChar(100)
+  normalizedName String    @unique @map("normalized_name") @db.VarChar(100)
+  dimension      Dimension
+  /// Unit used for display and data entry (e.g. "kg"); must belong to `dimension`.
+  displayUnit    String    @map("display_unit") @db.VarChar(10)
+  onHand         Decimal   @default(0) @map("on_hand") @db.Decimal(14, 3)
+  /// Weighted-average cost, paisa per base unit.
+  avgCostMinor   Decimal   @default(0) @map("avg_cost_minor") @db.Decimal(14, 4)
+  minLevel       Decimal   @default(0) @map("min_level") @db.Decimal(14, 3)
+  supplierId     String?   @map("supplier_id") @db.Uuid
+  isPackaging    Boolean   @default(false) @map("is_packaging")
+  isActive       Boolean   @default(true) @map("is_active")
+  notes          String    @default("") @db.VarChar(500)
+  version        Int       @default(0)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  supplier    Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  movements   StockMovement[]
+  recipeLines RecipeLine[]
+  modifiers   Modifier[]
+
+  @@map("ingredients")
+}
+
+/// Append-only raw-ingredient ledger.
+model StockMovement {
+  id            String                 @id @default(uuid()) @db.Uuid
+  seq           BigInt                 @unique @default(autoincrement())
+  ingredientId  String                 @map("ingredient_id") @db.Uuid
+  type          IngredientMovementType
+  qtyDelta      Decimal                @map("qty_delta") @db.Decimal(14, 3)
+  unitCostMinor Decimal                @map("unit_cost_minor") @db.Decimal(14, 4)
+  /// Signed value in whole paisa (qty × unit cost, rounded).
+  valueMinor    BigInt                 @map("value_minor")
+  balanceAfter  Decimal                @map("balance_after") @db.Decimal(14, 3)
+  refType       String?                @map("ref_type") @db.VarChar(40)
+  refId         String?                @map("ref_id") @db.VarChar(64)
+  reason        String?                @db.VarChar(300)
+  supplierId    String?                @map("supplier_id") @db.Uuid
+  /// Client-generated id that makes a submission idempotent (double-tap safe).
+  requestId     String?                @unique @map("request_id") @db.VarChar(64)
+  actorId       String?                @map("actor_id") @db.Uuid
+  occurredAt    DateTime               @default(now()) @map("occurred_at") @db.Timestamptz(3)
+
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  supplier   Supplier?  @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  @@index([ingredientId, occurredAt])
+  @@index([occurredAt])
+  @@index([refType, refId])
+  @@map("stock_movements")
+}
+
+model Product {
+  id               String       @id @default(uuid()) @db.Uuid
+  categoryId       String       @map("category_id") @db.Uuid
+  name             String       @db.VarChar(100)
+  normalizedName   String       @unique @map("normalized_name") @db.VarChar(100)
+  description      String       @default("") @db.VarChar(300)
+  priceMinor       Int          @map("price_minor")
+  /// Overrides the category's preparation station (printer routing) when set.
+  stationOverride  PrepStation? @map("station_override")
+  stockMode        StockMode    @map("stock_mode")
+  /// Manual on/off switch for the POS (e.g. "not serving today").
+  isAvailable      Boolean      @default(true) @map("is_available")
+  isActive         Boolean      @default(true) @map("is_active")
+  sortOrder        Int          @default(0) @map("sort_order")
+  /// Portions the recipe makes (BATCH) — 1 for MADE_TO_ORDER.
+  recipeYield      Int          @default(1) @map("recipe_yield")
+  /// Owner-entered cost for UNTRACKED items (paisa per portion).
+  manualCostMinor  Int?         @map("manual_cost_minor")
+  /// Finished portions on hand (BATCH / RESALE).
+  portionsOnHand   Int          @default(0) @map("portions_on_hand")
+  /// Weighted-average cost of portions on hand, paisa per portion.
+  portionCostMinor Decimal      @default(0) @map("portion_cost_minor") @db.Decimal(14, 4)
+  hasImage         Boolean      @default(false) @map("has_image")
+  version          Int          @default(0)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  category          MenuCategory       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  recipeLines       RecipeLine[]
+  modifierGroups    ModifierGroup[]
+  finishedMovements FinishedMovement[]
+  batches           ProductionBatch[]
+  image             ProductImage?
+
+  @@index([categoryId, sortOrder])
+  @@map("products")
+}
+
+model ProductImage {
+  productId String   @id @map("product_id") @db.Uuid
+  mimeType  String   @map("mime_type") @db.VarChar(40)
+  data      Bytes
+  etag      String   @db.VarChar(64)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_images")
+}
+
+model RecipeLine {
+  id           String  @id @default(uuid()) @db.Uuid
+  productId    String  @map("product_id") @db.Uuid
+  ingredientId String  @map("ingredient_id") @db.Uuid
+  /// Quantity in the ingredient's base unit for ONE recipe (i.e. `recipeYield` portions).
+  quantity     Decimal @db.Decimal(14, 3)
+  /// Extra percentage lost in preparation (trimming, evaporation, spillage).
+  wastagePct   Decimal @default(0) @map("wastage_pct") @db.Decimal(5, 2)
+  sortOrder    Int     @default(0) @map("sort_order")
+
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+
+  @@unique([productId, ingredientId])
+  @@map("recipe_lines")
+}
+
+/// Customisation options, e.g. "Milk" (one of: regular / oat +৳40), "Extras" (many).
+model ModifierGroup {
+  id        String @id @default(uuid()) @db.Uuid
+  productId String @map("product_id") @db.Uuid
+  name      String @db.VarChar(60)
+  minSelect Int    @default(0) @map("min_select")
+  maxSelect Int    @default(1) @map("max_select")
+  sortOrder Int    @default(0) @map("sort_order")
+
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  modifiers Modifier[]
+
+  @@map("modifier_groups")
+}
+
+model Modifier {
+  id              String   @id @default(uuid()) @db.Uuid
+  groupId         String   @map("group_id") @db.Uuid
+  name            String   @db.VarChar(60)
+  priceDeltaMinor Int      @default(0) @map("price_delta_minor")
+  /// Optional extra ingredient used when chosen (made-to-order items), in base units.
+  ingredientId    String?  @map("ingredient_id") @db.Uuid
+  quantity        Decimal? @db.Decimal(14, 3)
+  isAvailable     Boolean  @default(true) @map("is_available")
+  sortOrder       Int      @default(0) @map("sort_order")
+
+  group      ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  ingredient Ingredient?   @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+
+  @@map("modifiers")
+}
+
+/// Append-only finished-goods (portion) ledger.
+model FinishedMovement {
+  id            String               @id @default(uuid()) @db.Uuid
+  seq           BigInt               @unique @default(autoincrement())
+  productId     String               @map("product_id") @db.Uuid
+  type          FinishedMovementType
+  qtyDelta      Int                  @map("qty_delta")
+  unitCostMinor Decimal              @map("unit_cost_minor") @db.Decimal(14, 4)
+  valueMinor    BigInt               @map("value_minor")
+  balanceAfter  Int                  @map("balance_after")
+  refType       String?              @map("ref_type") @db.VarChar(40)
+  refId         String?              @map("ref_id") @db.VarChar(64)
+  reason        String?              @db.VarChar(300)
+  requestId     String?              @unique @map("request_id") @db.VarChar(64)
+  actorId       String?              @map("actor_id") @db.Uuid
+  occurredAt    DateTime             @default(now()) @map("occurred_at") @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([productId, occurredAt])
+  @@index([occurredAt])
+  @@index([refType, refId])
+  @@map("finished_movements")
+}
+
+model ProductionBatch {
+  id             String   @id @default(uuid()) @db.Uuid
+  batchNo        Int      @unique @default(autoincrement()) @map("batch_no")
+  productId      String   @map("product_id") @db.Uuid
+  portions       Int
+  /// Ingredients actually consumed, with costs (snapshot for audit/recall).
+  consumption    Json
+  totalCostMinor BigInt   @map("total_cost_minor")
+  unitCostMinor  Decimal  @map("unit_cost_minor") @db.Decimal(14, 4)
+  notes          String   @default("") @db.VarChar(300)
+  requestId      String   @unique @map("request_id") @db.VarChar(64)
+  preparedById   String?  @map("prepared_by_id") @db.Uuid
+  preparedAt     DateTime @default(now()) @map("prepared_at") @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([productId, preparedAt])
+  @@index([preparedAt])
+  @@map("production_batches")
 }

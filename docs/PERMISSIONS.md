@@ -3,7 +3,8 @@
 _Generated from `packages/shared/src/roles.ts` by `scripts/gen-permissions-doc.mjs`. Do not edit by hand._
 
 The server checks these permissions on every request; the interface only hides what a role cannot use.
-Permissions marked ● are enforced by Phase 1 endpoints; the rest are declared now and enforced when their module ships.
+Permissions marked ● are enforced by built endpoints (Phases 1–2); the rest are declared now and enforced when their module ships.
+`reports.view` currently controls who can see costs, stock values and margins.
 
 | Permission | Description | Owner | Manager | Cashier | Barista | Kitchen staff |
 |---|---|:-:|:-:|:-:|:-:|:-:|
@@ -24,12 +25,12 @@ Permissions marked ● are enforced by Phase 1 endpoints; the rest are declared 
 | `cash.reconcile` | Open / close cash drawer, reconcile | ✅ | ✅ | — | — | — |
 | `kitchen.view` | Kitchen ticket queue | ✅ | ✅ | — | — | ✅ |
 | `barista.view` | Barista ticket queue | ✅ | ✅ | — | ✅ | — |
-| `inventory.view` | See stock levels & movements | ✅ | ✅ | — | ✅ | ✅ |
-| `inventory.adjust` | Record waste, spoilage, stock counts | ✅ | ✅ | — | — | — |
-| `production.manage` | Record batch preparation | ✅ | ✅ | — | — | ✅ |
-| `purchases.manage` | Record stock purchases | ✅ | ✅ | — | — | — |
+| ● `inventory.view` | See stock levels & movements | ✅ | ✅ | — | ✅ | ✅ |
+| ● `inventory.adjust` | Add/edit ingredients; record waste, spoilage, corrections, counts | ✅ | ✅ | — | — | — |
+| ● `production.manage` | Record batch preparation | ✅ | ✅ | — | — | ✅ |
+| ● `purchases.manage` | Receive deliveries (stock in with cost), manage suppliers | ✅ | ✅ | — | — | — |
 | `expenses.manage` | Record operating expenses | ✅ | ✅ | — | — | — |
-| `reports.view` | Financial reports | ✅ | ✅ | — | — | — |
+| ● `reports.view` | Financial reports | ✅ | ✅ | — | — | — |
 | `reports.export` | Export PDF / CSV / Excel | ✅ | ✅ | — | — | — |
 | `printers.manage` | Configure printers, test print | ✅ | ✅ | — | — | — |
 

@@ -15,6 +15,9 @@ import { authRouter } from './modules/auth/routes.js';
 import { categoriesRouter } from './modules/categories/routes.js';
 import { dashboardRouter } from './modules/dashboard/routes.js';
 import { healthRouter } from './modules/health/routes.js';
+import { inventoryRouter } from './modules/inventory/routes.js';
+import { productionRouter } from './modules/production/routes.js';
+import { productsRouter } from './modules/products/routes.js';
 import { settingsRouter } from './modules/settings/routes.js';
 import { usersRouter } from './modules/users/routes.js';
 
@@ -62,6 +65,9 @@ export function createApp() {
   api.use('/users', usersRouter);
   api.use('/audit', auditRouter);
   api.use('/dashboard', dashboardRouter);
+  api.use(inventoryRouter);
+  api.use(productsRouter);
+  api.use(productionRouter);
   api.use(notFoundHandler);
   app.use('/api', api);
 

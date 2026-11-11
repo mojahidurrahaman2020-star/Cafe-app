@@ -5,6 +5,8 @@ import { requirePermission } from '../../middleware/auth.js';
 import { connectedClientCount } from '../../realtime/hub.js';
 import { getSettings } from '../settings/service.js';
 import { checkDatabase } from '../health/routes.js';
+import { stockSummary } from '../inventory/routes.js';
+import { hasPermission } from '@bitebrew/shared';
 
 export const dashboardRouter = Router();
 
@@ -14,9 +16,9 @@ export const dashboardRouter = Router();
  * phases that create that data — the UI shows them as "not yet available"
  * rather than inventing numbers.
  */
-dashboardRouter.get('/summary', requirePermission('dashboard.view'), async (_req, res) => {
+dashboardRouter.get('/summary', requirePermission('dashboard.view'), async (req, res) => {
   const now = new Date();
-  const [settings, db, groups, inactiveCategories, usersByRole, activeSessions] = await Promise.all([
+  const [settings, db, groups, inactiveCategories, usersByRole, activeSessions, stock] = await Promise.all([
     getSettings(),
     checkDatabase(),
     prisma.menuCategory.groupBy({ by: ['group'], where: { isActive: true }, _count: { _all: true } }),
@@ -27,6 +29,7 @@ dashboardRouter.get('/summary', requirePermission('dashboard.view'), async (_req
       select: { userId: true },
       distinct: ['userId'],
     }),
+    stockSummary(hasPermission(req.user!.role, 'reports.view')),
   ]);
 
   res.json({
@@ -42,5 +45,6 @@ dashboardRouter.get('/summary', requirePermission('dashboard.view'), async (_req
       inactive: inactiveCategories,
     },
     activeUsersByRole: Object.fromEntries(usersByRole.map((u) => [u.role, u._count._all])),
+    stock,
   });
 });

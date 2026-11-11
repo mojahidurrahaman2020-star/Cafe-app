@@ -11,6 +11,8 @@ export const Icon = {
   pos: base('M4 4h16v10H4zM8 18h8M12 14v4M7 8h4M7 11h2'),
   kitchen: base('M6 3v8a3 3 0 0 0 3 3v7M9 3v5M12 3v8a3 3 0 0 1-3 3M17 3c-1.7 1-3 3.2-3 6v4h3v8'),
   barista: base('M4 8h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 10h1.5a2.5 2.5 0 0 1 0 5H16M7 3v2M10 3v2M13 3v2'),
+  availability: base('M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'),
+  products: base('M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z'),
   menu: base('M4 6h16M4 12h16M4 18h10'),
   inventory: base('M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10'),
   production: base('M5 21V10l7-4 7 4v11M9 21v-6h6v6M3 21h18'),

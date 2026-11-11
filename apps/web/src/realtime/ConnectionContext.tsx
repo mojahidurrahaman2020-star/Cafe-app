@@ -98,6 +98,11 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         if (ev.type === 'settings.changed') void qc.invalidateQueries({ queryKey: ['settings'] });
         if (ev.type === 'categories.changed') void qc.invalidateQueries({ queryKey: ['categories'] });
         if (ev.type === 'users.changed') void qc.invalidateQueries({ queryKey: ['users'] });
+        if (ev.type === 'products.changed' || ev.type === 'inventory.changed') {
+          for (const k of ['products', 'availability', 'ingredients', 'suppliers', 'movements', 'batches', 'production-preview']) {
+            void qc.invalidateQueries({ queryKey: [k] });
+          }
+        }
         if (ev.type !== 'hello') void qc.invalidateQueries({ queryKey: ['dashboard'] });
       };
       ws.onclose = (e) => {
