@@ -6,6 +6,8 @@ import { Icon } from '../components/Icons';
 import { useAppInfo, useClock, useSettings } from '../lib/hooks';
 import { useConnection } from '../realtime/ConnectionContext';
 import { NAV } from './nav';
+import { IS_ONLINE_DEMO } from '../lib/demo';
+import logoUrl from '../assets/logo.svg';
 
 function initials(name: string) {
   return name.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
@@ -33,6 +35,28 @@ export function StatusPill() {
 }
 
 export function EnvBanner() {
+  if (IS_ONLINE_DEMO) return <OnlineDemoBanner />;
+  return <ServerEnvBanner />;
+}
+
+function OnlineDemoBanner() {
+  return (
+    <div className="env-banner" data-testid="env-banner">
+      Online demo · sample data, saved only in this browser ·{' '}
+      <button
+        type="button"
+        className="demo-reset"
+        onClick={() => {
+          window.dispatchEvent(new CustomEvent('bb:demo-reset'));
+        }}
+      >
+        Reset demo
+      </button>
+    </div>
+  );
+}
+
+function ServerEnvBanner() {
   const info = useAppInfo();
   const env = info.data?.appEnv;
   if (!env || env === 'production') return null;
@@ -77,7 +101,7 @@ export function AppShell() {
     <div className={`shell ${drawer ? 'drawer-open' : ''}`}>
       <aside className="sidebar" aria-label="Main navigation">
         <Link to="/" className="brand">
-          <img src="/icon.svg" alt="" />
+          <img src={logoUrl} alt="" />
           <div>
             <div className="brand-name">{settings.data?.businessName ?? 'Bite & Brew'}</div>
             <div className="brand-tag">{settings.data?.tagline ?? 'Café & Hangout'}</div>

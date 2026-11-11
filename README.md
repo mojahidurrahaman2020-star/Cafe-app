@@ -20,6 +20,20 @@ and [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md).
 | Offline order queue on tills & sync | Phase 3 |
 | Automatic online copy & owner remote view | Phase 6 |
 
+## Try it online (no installation)
+
+A browser-only **online demo** with sample data is published as a private claude.ai page
+(link shared with the owner). It runs the real screens and business rules against an
+in-browser stand-in for the server; changes are saved only in that browser (Reset demo
+restores the sample data). Rebuild it with:
+
+```bash
+node scripts/snapshot-demo.mjs           # copy sample data from a running DEMO server
+node scripts/build-online-demo.mjs online-demo.html
+```
+
+The online demo is for trying the app only — the café runs the real server and database below.
+
 ## Quick start (development)
 
 Requirements: **Node.js 22+**, **PostgreSQL 16** (local install or Docker).

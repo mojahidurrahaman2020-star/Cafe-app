@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { useQueryClient } from '@tanstack/react-query';
 import type { RealtimeEvent } from '@bitebrew/shared';
 import { useAuth } from '../auth/AuthContext';
+import { IS_ONLINE_DEMO } from '../lib/demo';
 
 /**
  * Connectivity model (see docs/OFFLINE.md):
@@ -74,6 +75,11 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   // Live updates over WebSocket, with exponential back-off reconnect
   useEffect(() => {
     if (!user) return;
+    if (IS_ONLINE_DEMO) {
+      // The online demo has no server to push live updates; data changes locally.
+      setLiveConnected(true);
+      return;
+    }
     let stopped = false;
     let attempt = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;

@@ -2,6 +2,17 @@
 
 Newest first. Each entry: what changed, why, and what was verified.
 
+## 2026-11-11 — Online demo for the owner
+
+The owner could not open the in-session preview, so a browser-only **online demo** was
+added: `apps/web/src/demo/` (stand-in API mirroring the server's validation, permissions and
+stock maths on sample data in localStorage), `vite.demo.config.ts`, and
+`scripts/snapshot-demo.mjs` + `scripts/build-online-demo.mjs`. Published as a private
+claude.ai page. The normal app is unchanged apart from a shared `bootstrap.tsx` and the logo
+now bundled with the code. Verified: phone (iPhone 13) and desktop — sign-in, availability
+20 → 30 after a batch, delivery receipt, reload persistence, cashier restrictions, no console
+errors, no horizontal scroll; the regular app's 24 browser tests still pass.
+
 ## 2026-11-11 — Phase 2: Menu items & inventory (complete, awaiting owner approval)
 
 **Owner decisions recorded:** Phase 1 approved. "Run offline & keep data stored online"

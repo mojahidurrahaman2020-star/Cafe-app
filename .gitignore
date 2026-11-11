@@ -11,3 +11,4 @@ e2e/results/
 *.log
 .DS_Store
 coverage/
+apps/web/dist-demo/

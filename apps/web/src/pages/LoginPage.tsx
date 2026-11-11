@@ -4,6 +4,16 @@ import { ROLE_HOME } from '@bitebrew/shared';
 import { errorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { EnvBanner, StatusPill } from '../layout/AppShell';
+import { IS_ONLINE_DEMO } from '../lib/demo';
+import logoUrl from '../assets/logo.svg';
+
+const DEMO_ACCOUNTS = [
+  ['owner', 'Owner'],
+  ['manager', 'Manager'],
+  ['cashier', 'Cashier'],
+  ['kitchen', 'Kitchen'],
+  ['barista', 'Barista'],
+] as const;
 
 export function LoginPage() {
   const { user, login } = useAuth();
@@ -37,7 +47,7 @@ export function LoginPage() {
       <EnvBanner />
       <div className="login-wrap">
         <section className="login-hero">
-          <img src="/icon.svg" alt="Bite & Brew logo" />
+          <img src={logoUrl} alt="Bite & Brew logo" />
           <h1>Bite &amp; Brew</h1>
           <div className="rule" />
           <div className="tag">Café &amp; Hangout</div>
@@ -53,6 +63,20 @@ export function LoginPage() {
             {error && (
               <div className="alert error" role="alert" data-testid="login-error">
                 {error}
+              </div>
+            )}
+            {IS_ONLINE_DEMO && (
+              <div className="alert info stack" style={{ gap: 10 }} data-testid="demo-accounts">
+                <span>
+                  <b>Try it as:</b> tap a role, then <b>Sign in</b>. Password for all: <code>demo-pass-2027</code>
+                </span>
+                <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+                  {DEMO_ACCOUNTS.map(([u, label]) => (
+                    <button key={u} type="button" className="btn sm secondary" onClick={() => { setUsername(u); setPassword('demo-pass-2027'); }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             <div className="field">
