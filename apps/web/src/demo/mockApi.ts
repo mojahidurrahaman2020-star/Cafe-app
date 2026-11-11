@@ -10,17 +10,22 @@ import {
   businessDate, canManageRole, categoryCreateSchema, categoryUpdateSchema, changePasswordSchema, createUserSchema,
   finishedAdjustSchema, finishedReceiveSchema, hasPermission, ingredientCreateSchema, ingredientUpdateSchema, isUnitOf,
   loginSchema, modifiersSchema, permissionsFor, productCreateSchema, productionSchema, productUpdateSchema, receiveStockSchema,
-  adjustStockSchema, recipeSchema, round3, settingsUpdateSchema, supplierCreateSchema, supplierUpdateSchema, toBase, updateUserSchema,
+  adjustStockSchema, recipeSchema, orderCreateSchema, paymentSchema, refundSchema, cancelOrderSchema, reprintSchema, taxRateSchema, taxRateUpdateSchema,
+  paymentMethodSchema, paymentMethodUpdateSchema, cashOpenSchema, cashCloseSchema, printerSchema, expenseCreateSchema, expenseVoidSchema, expenseCategorySchema,
+  priceOrder, discountFrom, receiptPayload, ticketPayload, testPayload, renderText, PREP_FLOW, round3, settingsUpdateSchema, supplierCreateSchema, supplierUpdateSchema, toBase, updateUserSchema,
   utcOffset, MENU_GROUPS,
   type BusinessSettingsDTO, type CategoryAvailabilityDTO, type Dimension, type IngredientDTO, type MenuCategoryDTO, type Permission,
   type ProductDTO, type ProductionBatchDTO, type Role, type SessionUser, type StockMode, type StockMovementDTO, type StockSummaryDTO,
   type SupplierDTO, type UnitCode, type UserDTO, type PrepStation,
+  type TaxRateDTO, type PaymentMethodDTO, type PaymentKind, type OrderDTO, type CashSessionDTO, type PrinterDTO, type PrintJobDTO, type PrintPayload,
+  type ExpenseCategoryDTO, type ExpenseDTO, type ReportDTO, type StationTicketDTO, type PrepStatus, type PrinterRole,
 } from '@bitebrew/shared';
 import type { z } from 'zod';
 import fixture from './fixture.json';
+import { requestId } from '../lib/ids';
 
 export const DEMO_PASSWORD = 'demo-pass-2027';
-const KEY = 'bitebrew-online-demo-v1';
+const KEY = 'bitebrew-online-demo-v3';
 
 // ─────────── state ───────────
 interface Ing { id: string; name: string; dimension: Dimension; displayUnit: UnitCode; onHand: number; avgCost: number; minLevel: number; supplierId: string | null; isPackaging: boolean; isActive: boolean; notes: string; version: number }
@@ -35,6 +40,9 @@ interface State {
   settings: BusinessSettingsDTO; users: User[]; categories: MenuCategoryDTO[]; suppliers: SupplierDTO[];
   ingredients: Ing[]; products: Prod[]; movements: Move[]; batches: ProductionBatchDTO[]; audit: Audit[];
   sessionUserId: string | null; seq: number; requestIds: Record<string, true>;
+  taxRates: TaxRateDTO[]; paymentMethods: PaymentMethodDTO[]; orders: OrderDTO[]; cash: (CashSessionDTO & { closed: boolean })[];
+  printers: PrinterDTO[]; jobs: (PrintJobDTO & { payload: PrintPayload; orderId: string | null; key: string })[];
+  expenseCategories: ExpenseCategoryDTO[]; expenses: ExpenseDTO[];
 }
 
 function seed(): State {
@@ -63,6 +71,19 @@ function seed(): State {
     sessionUserId: null,
     seq: movements.length + 1,
     requestIds: {},
+    taxRates: [],
+    paymentMethods: [
+      ['Cash', 'CASH', false], ['Card', 'CARD', false], ['bKash', 'MOBILE', true], ['Nagad', 'MOBILE', true],
+    ].map(([name, kind, ref], i) => ({ id: `00000000-0000-4000-8000-0000000001${String(i).padStart(2, '0')}`, name: name as string, kind: kind as PaymentKind, requiresReference: ref as boolean, isActive: true, sortOrder: i * 10, version: 0 })),
+    orders: [],
+    cash: [],
+    printers: (['RECEIPT', 'BARISTA', 'KITCHEN'] as const).map((role) => ({
+      id: `printer-${role}`, name: role === 'RECEIPT' ? 'Receipt printer' : role === 'BARISTA' ? 'Barista printer' : 'Kitchen printer', role, host: '', port: 9100,
+      paperWidthMm: 80 as const, isActive: true, cutPaper: true, openDrawer: role === 'RECEIPT', status: 'NOT_CONFIGURED', lastSeenAt: null, lastError: null, pendingJobs: 0, failedJobs: 0, version: 0,
+    })),
+    jobs: [],
+    expenseCategories: ['Rent', 'Electricity', 'Water', 'Internet', 'Salaries', 'Repairs', 'Transportation', 'Cleaning', 'Marketing', 'Other expenses'].map((name, i) => ({ id: `00000000-0000-4000-8000-0000000002${String(i).padStart(2, '0')}`, name, isActive: true })),
+    expenses: [],
   };
 }
 
@@ -86,7 +107,7 @@ export function resetDemo() {
 class ApiErr extends Error {
   constructor(public status: number, public code: string, message: string, public details?: unknown) { super(message); }
 }
-const uid = () => (typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`);
+const uid = () => requestId();
 const now = () => new Date().toISOString();
 const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
 const clean = (s: string) => s.trim().replace(/\s+/g, ' ');
@@ -322,7 +343,7 @@ r('GET', '/audit', (_m, _b, q) => {
   };
 });
 
-r('GET', '/dashboard/summary', () => {
+r('GET', '/dashboard/summary', (_m, _b, q) => {
   const u = need('dashboard.view'); const t = new Date();
   const byGroup: Record<string, number> = {}; for (const c of S.categories.filter((c) => c.isActive)) byGroup[c.group] = (byGroup[c.group] ?? 0) + 1;
   const byRole: Record<string, number> = {}; for (const x of S.users.filter((x) => x.isActive)) byRole[x.role] = (byRole[x.role] ?? 0) + 1;
@@ -330,6 +351,7 @@ r('GET', '/dashboard/summary', () => {
     businessDate: businessDate(t, S.settings.timezone, S.settings.businessDayStartHour), timezone: S.settings.timezone, utcOffset: utcOffset(S.settings.timezone, t),
     serverTime: t.toISOString(), database: { ok: true, latencyMs: 1 }, realtimeClients: 1, staffSignedIn: 1,
     categories: { byGroup, inactive: S.categories.filter((c) => !c.isActive).length }, activeUsersByRole: byRole, stock: stockSummary(showCost(u)),
+    ...demoDashboardExtras(q.get('period') ?? 'day', showCost(u)),
   };
 });
 
@@ -524,6 +546,258 @@ r('GET', '/production/batches', () => {
   const u = need('production.manage');
   return { batches: [...S.batches].sort((a, b) => b.batchNo - a.batchNo).slice(0, 30).map((x) => (showCost(u) ? x : { ...x, totalCostMinor: 0, unitCostMinor: 0 })) };
 });
+
+
+// ─────────── POS & orders (demo) ───────────
+const today = () => businessDate(new Date(), S.settings.timezone, S.settings.businessDayStartHour);
+const userName = (id: string | null) => S.users.find((u) => u.id === id)?.fullName ?? null;
+function queueJob(key: string, role: PrinterRole, kind: 'RECEIPT' | 'TICKET' | 'TEST', orderId: string | null, payload: PrintPayload | null, reprintNo = 0, reason: string | null = null) {
+  if (!payload || S.jobs.some((j) => j.key === key)) return;
+  const o = orderId ? S.orders.find((x) => x.id === orderId) : null;
+  S.jobs.push({ id: uid(), key, role, kind, orderId, orderNo: o?.orderNo ?? null, payload, status: 'PENDING', attempts: 0, lastError: null, reprintNo, reprintReason: reason, createdAt: now(), printedAt: null });
+}
+const printable = (o: OrderDTO) => ({ ...o, createdAt: new Date(o.createdAt), taxSnapshot: o.taxes });
+function tickets(o: OrderDTO, opts: { cancelled?: boolean } = {}) {
+  for (const st of ['KITCHEN', 'BARISTA'] as const) queueJob(`${o.id}:${st}:${opts.cancelled ? 'CANCEL' : 'TICKET'}:0`, st, 'TICKET', o.id, ticketPayload(printable(o), st, S.settings, opts));
+}
+const recalc = (o: OrderDTO) => { o.dueMinor = o.status === 'CANCELLED' ? 0 : o.totalMinor - o.paidMinor; };
+
+/** Deduct stock for an order line; returns cost. Throws (before changing anything) on shortage. */
+function consumeLine(p: Prod, qty: number, modifierIds: string[], lineId: string) {
+  if (p.stockMode === 'BATCH' || p.stockMode === 'RESALE') {
+    if (p.portionsOnHand < qty) throw new ApiErr(409, 'INSUFFICIENT_STOCK', 'Not enough stock for this order', { shortages: [{ id: p.id, name: p.name, required: qty, onHand: p.portionsOnHand, shortBy: qty - p.portionsOnHand }] });
+    const cost = roundMinor(p.portionCost * qty);
+    moveFin(p, 'SOLD', -qty, { refType: 'ORDER_LINE', refId: lineId });
+    return { cost, tracked: true };
+  }
+  if (p.stockMode === 'MADE_TO_ORDER') {
+    const needs = new Map<string, number>();
+    for (const l of p.recipe) needs.set(l.ingredientId, (needs.get(l.ingredientId) ?? 0) + lineNeed(l, p.recipeYield, qty));
+    for (const o of p.groups.flatMap((g) => g.options)) if (modifierIds.includes(o.id) && o.ingredientId && o.quantity) needs.set(o.ingredientId, (needs.get(o.ingredientId) ?? 0) + o.quantity * qty);
+    const short = [...needs].map(([id, n]) => ({ i: ing(id), n })).filter((x) => x.i.onHand < x.n);
+    if (short.length) throw new ApiErr(409, 'INSUFFICIENT_STOCK', 'Not enough stock for this order', { shortages: short.map((x) => ({ id: x.i.id, name: x.i.name, required: x.n, onHand: x.i.onHand, shortBy: x.n - x.i.onHand })) });
+    let cost = 0;
+    for (const [id, n] of needs) cost -= moveIng(ing(id), 'SALE_CONSUME', -n, { refType: 'ORDER_LINE', refId: lineId });
+    return { cost, tracked: true };
+  }
+  return { cost: (p.manualCostMinor ?? 0) * qty, tracked: false };
+}
+
+r('GET', '/tax-rates', () => { me(); return { taxRates: S.taxRates }; });
+r('POST', '/tax-rates', (_m, b) => { need('settings.manage'); const d = parse(taxRateSchema, b); const t = { id: uid(), name: d.name, rateBp: Math.round(d.ratePercent * 100), inclusive: d.inclusive, isActive: d.isActive ?? true, version: 0 }; S.taxRates.push(t); audit('tax.create', 'TaxRate', t.id, null, t); return [201, { taxRate: t }]; });
+r('PATCH', '/tax-rates/:id', (m, b) => { need('settings.manage'); const { version, ratePercent, ...d } = parse(taxRateUpdateSchema, b); const t = S.taxRates.find((x) => x.id === m[1]) ?? notFound(); if (t.version !== version) stale(t); Object.assign(t, d, ratePercent !== undefined ? { rateBp: Math.round(ratePercent * 100) } : {}, { version: t.version + 1 }); return { taxRate: t }; });
+r('GET', '/payment-methods', () => { me(); return { paymentMethods: [...S.paymentMethods].sort((a, b) => a.sortOrder - b.sortOrder) }; });
+r('POST', '/payment-methods', (_m, b) => { need('settings.manage'); const d = parse(paymentMethodSchema, b); if (S.paymentMethods.some((x) => norm(x.name) === norm(d.name))) conflict('A payment method with this name exists'); const pm = { id: uid(), name: d.name, kind: d.kind, requiresReference: d.requiresReference ?? false, isActive: d.isActive ?? true, sortOrder: d.sortOrder ?? 100, version: 0 }; S.paymentMethods.push(pm); return [201, { paymentMethod: pm }]; });
+r('PATCH', '/payment-methods/:id', (m, b) => { need('settings.manage'); const { version, ...d } = parse(paymentMethodUpdateSchema, b); const pm = S.paymentMethods.find((x) => x.id === m[1]) ?? notFound(); if (pm.version !== version) stale(pm); Object.assign(pm, d, { version: pm.version + 1 }); return { paymentMethod: pm }; });
+
+r('POST', '/orders', (_m, b) => {
+  const u = need('pos.use'); const d = parse(orderCreateSchema, b);
+  const ex = S.orders.find((o) => (o as any).clientRequestId === d.clientRequestId); if (ex) return { order: ex, replayed: true };
+  if (d.discount && !hasPermission(u.role, 'orders.discount')) throw new ApiErr(403, 'FORBIDDEN', 'Only a manager or the owner can give discounts');
+  let reuse: number | null = null;
+  if (d.replacesHeldOrderId) { const h = S.orders.find((o) => o.id === d.replacesHeldOrderId && o.status === 'HELD'); if (!h) conflict('That held order was already resumed or cancelled'); reuse = h.orderNo; S.orders = S.orders.filter((o) => o !== h); }
+  const lines = d.lines.map((l, idx) => {
+    const p = prod(l.productId); const c = cat(p.categoryId)!;
+    if (!p.isAvailable) throw new ApiErr(409, 'UNAVAILABLE', `${p.name} is switched off`);
+    const opts = p.groups.flatMap((g) => g.options).filter((o) => l.modifierIds.includes(o.id));
+    for (const g of p.groups) { const n = g.options.filter((o) => l.modifierIds.includes(o.id)).length; if (n < g.minSelect || n > g.maxSelect) bad(`${p.name}: check the choices for "${g.name}"`); }
+    const unit = p.priceMinor + opts.reduce((a, o) => a + o.priceDeltaMinor, 0);
+    return { id: uid(), productId: p.id, name: p.name, categoryName: c.name, unitPriceMinor: unit, quantity: l.quantity, lineTotalMinor: unit * l.quantity, modifiers: opts.map((o) => ({ id: o.id, name: o.name, priceDeltaMinor: o.priceDeltaMinor })), notes: l.notes ?? '', station: p.stationOverride ?? c.station, prepStatus: 'PENDING' as PrepStatus, stockState: 'NOT_TRACKED' as const, costMinor: 0 };
+  });
+  const t = priceOrder(lines.map((l) => l.lineTotalMinor), discountFrom(d.discount ?? null, lines.reduce((a, l) => a + l.lineTotalMinor, 0)), S.taxRates.filter((x) => x.isActive));
+  const date = today();
+  const o: OrderDTO & { clientRequestId: string } = {
+    id: uid(), clientRequestId: d.clientRequestId, orderNo: reuse ?? Math.max(0, ...S.orders.filter((x) => x.businessDate === date).map((x) => x.orderNo)) + 1, businessDate: date,
+    serviceType: d.serviceType, tableNo: d.serviceType === 'DINE_IN' ? d.tableNo ?? null : null, customerName: d.customerName ?? '', status: d.hold ? 'HELD' : 'OPEN', paymentStatus: 'UNPAID',
+    subtotalMinor: t.subtotalMinor, discountMinor: t.discountMinor, discountReason: d.discount?.reason ?? null, taxMinor: t.taxMinor, totalMinor: t.totalMinor, paidMinor: 0, refundedMinor: 0, dueMinor: t.totalMinor,
+    taxes: t.taxes, notes: d.notes ?? '', placedOffline: false, needsReview: false, reviewNote: null, createdBy: u.fullName, createdAt: now(), completedAt: null, cancelledAt: null, cancelReason: null,
+    lines, payments: [], refunds: [], version: 0,
+  };
+  if (!d.hold) for (const l of o.lines) { const c = consumeLine(prod(l.productId), l.quantity, l.modifiers.map((x) => x.id), l.id); (l as any).costMinor = c.cost; l.stockState = c.tracked ? 'CONSUMED' : 'NOT_TRACKED'; }
+  S.orders.push(o);
+  if (!d.hold) tickets(o);
+  audit(d.hold ? 'order.hold' : 'order.create', 'Order', o.id);
+  return [201, { order: o, replayed: false }];
+});
+r('GET', '/orders', (_m, _b, q) => {
+  need('orders.view'); const st = q.get('status'); const date = q.get('date') ?? today();
+  let rows = S.orders.filter((o) => (q.get('needsReview') ? o.needsReview : o.businessDate === date));
+  if (st === 'ACTIVE') rows = rows.filter((o) => o.status === 'HELD' || o.status === 'OPEN'); else if (st) rows = rows.filter((o) => o.status === st);
+  return { orders: [...rows].sort((a, b) => b.orderNo - a.orderNo), businessDate: date };
+});
+const order = (id: string) => S.orders.find((o) => o.id === id) ?? notFound('Order not found');
+r('GET', '/orders/:id', (m) => { need('orders.view'); return { order: order(m[1]!) }; });
+r('POST', '/orders/:id/send', (m) => {
+  need('pos.use'); const o = order(m[1]!); if (o.status !== 'HELD') conflict('This order has already been sent');
+  for (const l of o.lines) { const c = consumeLine(prod(l.productId), l.quantity, l.modifiers.map((x) => x.id), l.id); (l as any).costMinor = c.cost; l.stockState = c.tracked ? 'CONSUMED' : 'NOT_TRACKED'; }
+  o.status = 'OPEN'; tickets(o); return { order: o };
+});
+r('POST', '/orders/:id/payments', (m, b) => {
+  const u = need('pos.use'); const d = parse(paymentSchema, b); const o = order(m[1]!);
+  if (S.requestIds[d.idempotencyKey]) return { order: o, replayed: true, changeMinor: 0 };
+  if (o.status === 'HELD') conflict('Send the order before taking payment'); if (o.status === 'CANCELLED') conflict('This order was cancelled');
+  const due = o.totalMinor - o.paidMinor; if (due <= 0) conflict('This order is already fully paid'); if (d.amountMinor > due) bad(`Only ${due / 100} is still due`);
+  const pm = S.paymentMethods.find((x) => x.id === d.methodId && x.isActive) ?? bad('Choose an active payment method');
+  if (pm.requiresReference && !d.reference) bad(`Enter the ${pm.name} transaction ID`);
+  let tendered: number | null = null; let change = 0;
+  if (pm.kind === 'CASH' && d.tenderedMinor) { if (d.tenderedMinor < d.amountMinor) bad('Cash given is less than the amount'); tendered = d.tenderedMinor; change = d.tenderedMinor - d.amountMinor; }
+  S.requestIds[d.idempotencyKey] = true;
+  o.payments.push({ id: uid(), methodId: pm.id, methodName: pm.name, kind: pm.kind, amountMinor: d.amountMinor, tenderedMinor: tendered, changeMinor: change, reference: d.reference || null, receivedBy: u.fullName, createdAt: now() });
+  const session = S.cash.find((c) => !c.closed);
+  if (session && pm.kind === 'CASH') { session.cashSalesMinor += d.amountMinor; session.expectedCashMinor += d.amountMinor; }
+  o.paidMinor += d.amountMinor;
+  if (o.paidMinor >= o.totalMinor) { o.paymentStatus = 'PAID'; o.status = 'COMPLETED'; o.completedAt = now(); queueJob(`${o.id}:RECEIPT:RECEIPT:0`, 'RECEIPT', 'RECEIPT', o.id, receiptPayload(printable(o), S.settings)); }
+  else o.paymentStatus = 'PARTIALLY_PAID';
+  recalc(o); audit('order.payment', 'Order', o.id); return [201, { order: o, replayed: false, changeMinor: change }];
+});
+r('POST', '/orders/:id/cancel', (m, b) => {
+  const u = need('pos.use'); const { reason } = parse(cancelOrderSchema, b); const o = order(m[1]!);
+  if (o.status === 'CANCELLED') conflict('This order is already cancelled');
+  if (o.status !== 'HELD' && !hasPermission(u.role, 'orders.cancel')) throw new ApiErr(403, 'FORBIDDEN', 'Only a manager or the owner can cancel a sent order');
+  if (o.paidMinor - o.refundedMinor > 0) conflict('Refund the payment before cancelling this order');
+  let restored = 0; let wasted = 0;
+  for (const l of o.lines) {
+    if (l.stockState === 'CONSUMED' && l.prepStatus === 'PENDING') {
+      for (const mv of S.movements.filter((x) => x.refId === l.id && (x.type === 'SOLD' || x.type === 'SALE_CONSUME'))) {
+        if (mv.kind === 'FINISHED') moveFin(prod(mv.itemId), 'SALE_REVERSAL', -mv.qtyDelta, { refType: 'ORDER_LINE', refId: l.id, incomingValue: -mv.valueMinor });
+        else moveIng(ing(mv.itemId), 'RECEIVE', -mv.qtyDelta, { refType: 'ORDER_LINE', refId: l.id, receiveValue: -mv.valueMinor, reason: 'Order cancelled' });
+      }
+      l.stockState = 'RESTORED'; restored++;
+    } else if (l.stockState === 'CONSUMED') { l.stockState = 'WASTED'; wasted++; }
+    l.prepStatus = 'CANCELLED';
+  }
+  const wasHeld = o.status === 'HELD';
+  o.status = 'CANCELLED'; o.cancelledAt = now(); o.cancelReason = reason; recalc(o);
+  if (!wasHeld) tickets(o, { cancelled: true });
+  audit('order.cancel', 'Order', o.id, null, { reason }); return { order: o, restored, wasted, wasHeld };
+});
+r('POST', '/orders/:id/refunds', (m, b) => {
+  const u = need('orders.refund'); const d = parse(refundSchema, b); const o = order(m[1]!);
+  if (S.requestIds[d.idempotencyKey]) return { order: o, replayed: true };
+  const max = o.paidMinor - o.refundedMinor; if (max <= 0) conflict('Nothing has been paid that can be refunded'); if (d.amountMinor > max) bad(`At most ${max / 100} can be refunded`);
+  const pm = S.paymentMethods.find((x) => x.id === d.methodId) ?? bad('Choose a payment method');
+  S.requestIds[d.idempotencyKey] = true;
+  o.refunds.push({ id: uid(), methodName: pm.name, amountMinor: d.amountMinor, reason: d.reason, approvedBy: u.fullName, createdAt: now() });
+  const session = S.cash.find((c) => !c.closed);
+  if (session && pm.kind === 'CASH') { session.cashRefundsMinor += d.amountMinor; session.expectedCashMinor -= d.amountMinor; }
+  o.refundedMinor += d.amountMinor; o.paymentStatus = o.refundedMinor >= o.paidMinor ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+  audit('order.refund', 'Order', o.id, null, { amount: d.amountMinor, reason: d.reason }); return [201, { order: o, replayed: false }];
+});
+r('POST', '/orders/:id/reprint', (m, b) => {
+  need('orders.reprint'); const { role, reason } = parse(reprintSchema, b); const o = order(m[1]!);
+  const n = Math.max(0, ...S.jobs.filter((j) => j.orderId === o.id && j.role === role).map((j) => j.reprintNo)) + 1;
+  const payload = role === 'RECEIPT' ? receiptPayload(printable(o), S.settings, { reprint: n }) : ticketPayload(printable(o), role, S.settings, { reprint: n });
+  if (!payload) bad('This order has no items for that printer');
+  queueJob(`${o.id}:${role}:R:${n}`, role, role === 'RECEIPT' ? 'RECEIPT' : 'TICKET', o.id, payload, n, reason); return [201, { ok: true }];
+});
+r('POST', '/orders/:id/review', (m, b) => { need('orders.cancel'); const o = order(m[1]!); o.needsReview = false; o.reviewNote = `Reviewed: ${(b as { note?: string })?.note ?? ''}`; return { order: o }; });
+
+// stations
+const stationOf = (s: string) => (s === 'kitchen' ? 'KITCHEN' : s === 'barista' ? 'BARISTA' : notFound());
+r('GET', '/stations/:id', (m) => {
+  const st = stationOf(m[1]!); need(st === 'KITCHEN' ? 'kitchen.view' : 'barista.view');
+  const out: StationTicketDTO[] = S.orders.filter((o) => (o.status === 'OPEN' || o.status === 'COMPLETED') && o.lines.some((l) => l.station === st && ['PENDING', 'PREPARING', 'READY'].includes(l.prepStatus)))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map((o) => ({ orderId: o.id, orderNo: o.orderNo, serviceType: o.serviceType, tableNo: o.tableNo, customerName: o.customerName, notes: o.notes, createdAt: o.createdAt, lines: o.lines.filter((l) => l.station === st && l.prepStatus !== 'CANCELLED').map((l) => ({ id: l.id, name: l.name, quantity: l.quantity, modifiers: l.modifiers, notes: l.notes, prepStatus: l.prepStatus })) }));
+  return { tickets: out };
+});
+r('POST', '/stations/:id/orders/([^/]+)/advance', (m) => {
+  const st = stationOf(m[1]!); need(st === 'KITCHEN' ? 'kitchen.view' : 'barista.view');
+  const o = order(m[2]!); const lines = o.lines.filter((l) => l.station === st && ['PENDING', 'PREPARING', 'READY'].includes(l.prepStatus));
+  if (!lines.length) conflict('Nothing left to prepare on this order');
+  const low = Math.min(...lines.map((l) => PREP_FLOW.indexOf(l.prepStatus))); const next = PREP_FLOW[low + 1]!;
+  for (const l of lines) if (PREP_FLOW.indexOf(l.prepStatus) === low) l.prepStatus = next;
+  return { status: next };
+});
+
+// cash drawer
+r('GET', '/cash/current', () => { need('pos.use'); return { session: S.cash.find((c) => !c.closed) ?? null }; });
+r('GET', '/cash/sessions', () => { need('cash.reconcile'); return { sessions: [...S.cash].reverse() }; });
+r('POST', '/cash/open', (_m, b) => {
+  const u = need('pos.use'); const { openingFloatMinor } = parse(cashOpenSchema, b); if (S.cash.some((c) => !c.closed)) conflict('The cash drawer is already open');
+  const c = { id: uid(), openedBy: u.fullName, openedAt: now(), openingFloatMinor, cashSalesMinor: 0, cashRefundsMinor: 0, expectedCashMinor: openingFloatMinor, closedBy: null, closedAt: null, countedCashMinor: null, varianceMinor: null, notes: '', closed: false };
+  S.cash.push(c); return [201, { session: c }];
+});
+r('POST', '/cash/close', (_m, b) => {
+  const u = need('cash.reconcile'); const { countedCashMinor, notes } = parse(cashCloseSchema, b); const c = S.cash.find((x) => !x.closed) ?? bad('No cash drawer session is open');
+  Object.assign(c, { closed: true, closedBy: u.fullName, closedAt: now(), countedCashMinor, varianceMinor: countedCashMinor - c.expectedCashMinor, notes: notes ?? '' }); return { session: c };
+});
+
+// printers (the online demo has no printers on its network: jobs wait, previews show the exact printout)
+const printerList = () => S.printers.map((p) => ({ ...p, status: p.host ? 'OFFLINE' : 'NOT_CONFIGURED', lastError: p.host ? 'The online demo cannot reach printers — install the app at the café to print.' : null, pendingJobs: S.jobs.filter((j) => j.role === p.role && j.status === 'PENDING').length, failedJobs: 0 }));
+r('GET', '/printers', () => { me(); return { printers: printerList() }; });
+r('PATCH', '/printers/:id', (m, b) => { need('printers.manage'); const { version, ...d } = parse(printerSchema, b); const p = S.printers.find((x) => x.id === m[1]) ?? notFound(); if (p.version !== version) stale(p); Object.assign(p, d, { version: p.version + 1 }); return { printers: printerList() }; });
+r('POST', '/printers/:id/test', (m) => { need('printers.manage'); const p = S.printers.find((x) => x.id === m[1]) ?? notFound(); if (!p.host) bad('Enter the printer’s IP address first'); queueJob(`test:${uid()}`, p.role, 'TEST', null, testPayload(p.role, p.name, p.paperWidthMm, S.settings)); return [201, { ok: true }]; });
+r('GET', '/print-jobs', (_m, _b, q) => { me(); const oid = q.get('orderId'); return { jobs: [...S.jobs].reverse().filter((j) => !oid || j.orderId === oid).slice(0, Number(q.get('limit')) || 50).map(({ payload: _p, key: _k, orderId: _o, ...j }) => j) }; });
+r('GET', '/print-jobs/:id/preview', (m) => { me(); const j = S.jobs.find((x) => x.id === m[1]) ?? notFound(); const p = S.printers.find((x) => x.role === j.role)!; return { text: renderText(j.payload, p.paperWidthMm), paperWidthMm: p.paperWidthMm }; });
+r('POST', '/print-jobs/:id/retry', () => conflict('Only failed print jobs can be retried'));
+r('POST', '/print-jobs/:id/cancel', (m) => { need('orders.reprint'); const j = S.jobs.find((x) => x.id === m[1]) ?? notFound(); j.status = 'CANCELLED'; return { ok: true }; });
+
+// expenses
+r('GET', '/expense-categories', () => { need('expenses.manage'); return { categories: S.expenseCategories }; });
+r('POST', '/expense-categories', (_m, b) => { need('expenses.manage'); const d = parse(expenseCategorySchema, b); if (S.expenseCategories.some((c) => norm(c.name) === norm(d.name))) conflict('This category already exists'); const c = { id: uid(), name: d.name, isActive: true }; S.expenseCategories.push(c); return [201, { category: c }]; });
+r('GET', '/expenses', (_m, _b, q) => { need('expenses.manage'); const f = q.get('from') ?? today(); const t = q.get('to') ?? today(); return { expenses: S.expenses.filter((e) => e.businessDate >= f && e.businessDate <= t).sort((a, b) => b.businessDate.localeCompare(a.businessDate)) }; });
+r('POST', '/expenses', (_m, b) => {
+  const u = need('expenses.manage'); const d = parse(expenseCreateSchema, b); if (S.requestIds[d.requestId]) return { ok: true, replayed: true };
+  const c = S.expenseCategories.find((x) => x.id === d.categoryId) ?? bad('Choose an expense category'); S.requestIds[d.requestId] = true;
+  S.expenses.push({ id: uid(), categoryId: c.id, categoryName: c.name, amountMinor: d.amountMinor, businessDate: d.businessDate, paidWith: d.paidWith ?? '', note: d.note ?? '', createdBy: u.fullName, createdAt: now(), voidedAt: null, voidReason: null });
+  return [201, { ok: true, replayed: false }];
+});
+r('POST', '/expenses/:id/void', (m, b) => { need('expenses.manage'); const { reason } = parse(expenseVoidSchema, b); const e = S.expenses.find((x) => x.id === m[1]) ?? notFound(); e.voidedAt = now(); e.voidReason = reason; return { ok: true }; });
+
+// reports
+const addDays = (d: string, n: number) => { const t = new Date(`${d}T00:00:00Z`); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+function report(from: string, to: string): ReportDTO {
+  const orders = S.orders.filter((o) => o.businessDate >= from && o.businessDate <= to && (o.status === 'OPEN' || o.status === 'COMPLETED'));
+  const lines = orders.flatMap((o) => o.lines.filter((l) => l.prepStatus !== 'CANCELLED'));
+  const inRange = (iso: string) => { const d = businessDate(new Date(iso), S.settings.timezone, S.settings.businessDayStartHour); return d >= from && d <= to; };
+  const pays = S.orders.flatMap((o) => o.payments).filter((p) => inRange(p.createdAt));
+  const refunds = S.orders.flatMap((o) => o.refunds).filter((p) => inRange(p.createdAt));
+  const exps = S.expenses.filter((e) => !e.voidedAt && e.businessDate >= from && e.businessDate <= to);
+  const moves = S.movements.filter((mv) => inRange(mv.occurredAt));
+  const refundsTotal = refunds.reduce((a, x) => a + x.amountMinor, 0);
+  const net = orders.reduce((a, o) => a + o.totalMinor - o.taxMinor, 0) - refundsTotal;
+  const cogs = lines.reduce((a, l) => a + ((l as any).costMinor ?? 0), 0);
+  const losses = -moves.filter((mv) => ['WASTE', 'SPOILAGE', 'ADJUSTMENT', 'COUNT'].includes(mv.type)).reduce((a, mv) => a + mv.valueMinor, 0)
+    + S.orders.filter((o) => o.cancelledAt && inRange(o.cancelledAt)).flatMap((o) => o.lines).filter((l) => l.stockState === 'WASTED').reduce((a, l) => a + ((l as any).costMinor ?? 0), 0);
+  const expTotal = exps.reduce((a, e) => a + e.amountMinor, 0);
+  const group = (items: { k: string; q: number; v: number }[]) => [...items.reduce((m2, i) => { const c = m2.get(i.k) ?? { quantity: 0, revenueMinor: 0 }; c.quantity += i.q; c.revenueMinor += i.v; return m2.set(i.k, c); }, new Map<string, { quantity: number; revenueMinor: number }>())].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.revenueMinor - a.revenueMinor);
+  const methods = new Map<string, { name: string; kind: PaymentKind; receivedMinor: number; refundedMinor: number }>();
+  for (const p of pays) { const x = methods.get(p.methodName) ?? { name: p.methodName, kind: p.kind, receivedMinor: 0, refundedMinor: 0 }; x.receivedMinor += p.amountMinor; methods.set(p.methodName, x); }
+  for (const rf of refunds) { const x = methods.get(rf.methodName) ?? { name: rf.methodName, kind: 'OTHER' as PaymentKind, receivedMinor: 0, refundedMinor: 0 }; x.refundedMinor += rf.amountMinor; methods.set(rf.methodName, x); }
+  const series: ReportDTO['series'] = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    const os = orders.filter((o) => o.businessDate === d);
+    series.push({ period: d, salesMinor: os.reduce((a, o) => a + o.totalMinor - o.taxMinor, 0), orders: os.length, expensesMinor: exps.filter((e) => e.businessDate === d).reduce((a, e) => a + e.amountMinor, 0), cogsMinor: os.flatMap((o) => o.lines).reduce((a, l) => a + ((l as any).costMinor ?? 0), 0) });
+  }
+  const em = new Map<string, number>(); for (const e of exps) em.set(e.categoryName, (em.get(e.categoryName) ?? 0) + e.amountMinor);
+  return {
+    from, to, orders: orders.length, itemsSold: lines.reduce((a, l) => a + l.quantity, 0), grossSalesMinor: orders.reduce((a, o) => a + o.subtotalMinor, 0),
+    discountsMinor: orders.reduce((a, o) => a + o.discountMinor, 0), taxMinor: orders.reduce((a, o) => a + o.taxMinor, 0), refundsMinor: refundsTotal, netSalesMinor: net,
+    cogsMinor: cogs, grossProfitMinor: net - cogs, inventoryLossesMinor: losses, expensesMinor: expTotal, netProfitMinor: net - cogs - expTotal - losses,
+    inventoryPurchasesMinor: moves.filter((mv) => mv.type === 'RECEIVE' && mv.refType === 'RECEIPT').reduce((a, mv) => a + mv.valueMinor, 0),
+    averageOrderMinor: orders.length ? Math.round(orders.reduce((a, o) => a + o.totalMinor, 0) / orders.length) : 0,
+    cancelledOrders: S.orders.filter((o) => o.status === 'CANCELLED' && o.businessDate >= from && o.businessDate <= to).length,
+    paymentMethods: [...methods.values()].map((x) => ({ ...x, netMinor: x.receivedMinor - x.refundedMinor })),
+    categories: group(lines.map((l) => ({ k: l.categoryName, q: l.quantity, v: l.lineTotalMinor }))), topItems: group(lines.map((l) => ({ k: l.name, q: l.quantity, v: l.lineTotalMinor }))).slice(0, 10),
+    expensesByCategory: [...em].map(([name, amountMinor]) => ({ name, amountMinor })), series: series.length > 62 ? series.slice(-62) : series,
+  };
+}
+r('GET', '/reports/summary', (_m, _b, q) => { need('reports.view'); const f = q.get('from') ?? today(); const t = q.get('to') ?? today(); if (f > t) bad('"From" must be before "to"'); return { report: report(f, t) }; });
+r('GET', '/reports/export', () => bad('Downloading PDF, Excel and CSV works in the full app installed at the café. The online demo cannot create files.'));
+r('POST', '/sync/orders', () => bad('Offline sync is not available in the online demo.'));
+
+export function demoDashboardExtras(period: string, canMoney: boolean) {
+  const t = today();
+  const from = period === 'month' ? `${t.slice(0, 8)}01` : period === 'week' ? addDays(t, -((new Date(`${t}T00:00:00Z`).getUTCDay() + 6) % 7)) : t;
+  const pending = (st: string) => S.orders.filter((o) => o.status === 'OPEN' || o.status === 'COMPLETED').flatMap((o) => o.lines).filter((l) => l.station === st && ['PENDING', 'PREPARING', 'READY'].includes(l.prepStatus)).length;
+  return {
+    period, periodFrom: from, periodTo: t, report: canMoney ? report(from, t) : null,
+    kitchenPending: pending('KITCHEN'), baristaPending: pending('BARISTA'),
+    openOrders: S.orders.filter((o) => o.status === 'OPEN').length, heldOrders: S.orders.filter((o) => o.status === 'HELD').length, needsReview: 0,
+    printers: printerList().map((p) => ({ role: p.role, name: p.name, status: p.status, pendingJobs: p.pendingJobs, failedJobs: 0 })),
+  };
+}
 
 // ─────────── fetch interceptor ───────────
 export function handleDemoRequest(method: string, url: string, body: unknown): { status: number; body: unknown } {

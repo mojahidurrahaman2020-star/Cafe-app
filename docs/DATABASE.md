@@ -13,7 +13,7 @@ PostgreSQL 16, managed through Prisma migrations (`apps/server/prisma`).
 ## 1. Entity relationship diagram (target model)
 
 Built: **Phase 1** `users`, `sessions`, `business_settings`, `menu_categories`, `audit_logs`; **Phase 2** `suppliers`, `ingredients`, `stock_movements`, `products`, `product_images`, `recipe_lines`, `modifier_groups`, `modifiers`, `finished_movements`, `production_batches`.
-The rest are designed here and are added by later migrations.
+POS/printing/finance (migration `…_pos_printing_finance`): `tax_rates`, `payment_methods`, `cash_sessions`, `orders`, `order_lines`, `payments`, `refunds`, `printers`, `print_jobs`, `expense_categories`, `expenses` — with CHECK constraints (paid ≤ total, refunded ≤ paid, positive amounts, 58/80 mm paper), append-only triggers on `payments` and `refunds`, and a unique index allowing only one open cash drawer.
 
 ```mermaid
 erDiagram

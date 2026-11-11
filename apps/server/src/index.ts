@@ -5,14 +5,18 @@ import { logger } from './lib/logger.js';
 import { prisma } from './lib/prisma.js';
 import { attachRealtime } from './realtime/hub.js';
 import { getSettings } from './modules/settings/service.js';
+import { startPrintService } from './modules/printing/service.js';
+import { seedBase } from './scripts/seed.js';
 
 async function main() {
   await prisma.$queryRaw`SELECT 1`;
   await getSettings(); // ensure the settings singleton exists
+  await seedBase(); // idempotent: defaults that must always exist (never overwrites edits)
   logger.info('Database connection OK');
 
   const server = createServer(createApp());
   attachRealtime(server);
+  if (env.PRINT_SERVICE === 'on' && env.APP_ENV !== 'test') startPrintService();
   server.listen(env.PORT, () => {
     logger.info(`Bite & Brew API listening on http://localhost:${env.PORT} (APP_ENV=${env.APP_ENV})`);
   });

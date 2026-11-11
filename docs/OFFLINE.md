@@ -32,11 +32,11 @@ instead of trying to engineer around it.
 
 Verified by the browser test "OFFLINE status is clearly displayed…" (see TEST_RESULTS.md).
 
-## 3. Controlled offline ordering (planned, Phase 3 — moved forward from Phase 6)
+## 3. Controlled offline ordering (implemented)
 
 Only for devices the owner marks `offline_orders_allowed` (normally the main till).
 
-1. **Local queue**: orders are written to IndexedDB on that device as an outbox, each
+1. **Local queue**: orders are written to the browser's local storage on that device as an outbox, each
    with a client-generated UUID (`client_request_id`) and a device-prefixed order number
    (e.g. `T1-0007`) so numbers never collide with server-issued ones.
 2. **Stock while offline**: the device works from the **last synchronised availability
@@ -47,12 +47,13 @@ Only for devices the owner marks `offline_orders_allowed` (normally the main til
 4. **Printing offline**: kitchen/barista tickets still print if the **print agent and LAN**
    are up (internet-only outage). If the server itself is down, tickets cannot be routed;
    the till prints nothing automatically and shows the order for verbal hand-off.
-5. **Synchronisation** when connectivity returns: `POST /sync/batch` uploads the queue in
+5. **Synchronisation** when connectivity returns: `POST /sync/orders` uploads the queue in
    order. Each order is idempotent by `client_request_id` — re-sending is harmless.
 6. **Conflict detection**: for each line the server tries the normal atomic stock
    deduction. If stock is insufficient (another device sold it), the order is **still
-   recorded** (the food was already served) but the shortfall is written as a
-   `SYNC_CONFLICT` stock movement and placed in a **conflict review list** for a manager.
+   recorded** (the food was already served), that line is marked `CONFLICT` without forcing
+   stock negative, and the order is flagged **Needs review** (shown on the dashboard and in
+   POS → Today's orders) for a manager.
    The server **never silently overwrites** stock counts or drops an order.
 7. Manager resolves each conflict: confirm a stock correction (waste, miscount, extra
    batch prepared) or adjust — every resolution is audited.
@@ -65,15 +66,22 @@ Only for devices the owner marks `offline_orders_allowed` (normally the main til
 - Kitchen and barista screens receive nothing from an offline till until it syncs.
 - Owner dashboard figures are incomplete until all devices have synchronised.
 - Card / mobile-payment confirmation is not possible without their networks.
-- A device whose browser data is cleared while it holds unsynced orders loses them; the
-  app will warn when unsynced orders exist and block sign-out until they sync.
+- A device whose browser data is cleared while it holds unsynced orders loses them; the POS
+  and Settings → This device show how many orders are waiting.
+- Offline payments are cash only; offline is allowed per device by a manager/owner.
+- Implemented & tested: queue → upload twice → created once with its payment; stock already
+  gone → order kept and flagged for review (API tests). Browser-level offline queue on a
+  real tablet with Wi-Fi switched off still needs a hands-on check at the café.
 - Price or menu changes made while a device is offline reach it only after reconnecting;
   orders keep the price shown at the time of sale.
 
-## 5. Online copy (planned, Phase 6)
+## 5. Online copy (backups: implemented · live replica: not built)
 
-- The café server pushes changes to an online server whenever the internet is up
-  (append-only ledgers and audit log make this a one-way, resumable copy).
+- Implemented: `scripts/offsite-copy.sh` copies every verified daily backup to the owner's
+  cloud storage (Google Drive, OneDrive, Dropbox, B2, S3 via rclone) whenever the internet
+  is up; failures retry next hour.
+- Not built: a continuously replicated online database. Remote viewing is done by
+  connecting to the café server over a VPN (DEPLOYMENT.md).
 - If the internet is down for hours or days, the copy simply catches up later; nothing
   in the café waits for it.
 - The online copy powers the owner's remote dashboard (read-only) and serves as the

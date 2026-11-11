@@ -26,6 +26,8 @@ export interface BusinessSettingsDTO {
   dineInEnabled: boolean;
   takeawayEnabled: boolean;
   receiptFooter: string;
+  tableCount: number;
+  taxRegistration: string;
   version: number;
   updatedAt: string;
 }
@@ -78,7 +80,10 @@ export type RealtimeEvent =
   | { type: 'categories.changed' }
   | { type: 'users.changed' }
   | { type: 'products.changed' }
-  | { type: 'inventory.changed' };
+  | { type: 'inventory.changed' }
+  | { type: 'orders.changed'; orderId?: string }
+  | { type: 'printers.changed' }
+  | { type: 'finance.changed' };
 
 export interface ApiErrorBody {
   error: { code: string; message: string; details?: unknown };

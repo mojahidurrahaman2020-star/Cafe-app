@@ -104,6 +104,18 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         if (ev.type === 'settings.changed') void qc.invalidateQueries({ queryKey: ['settings'] });
         if (ev.type === 'categories.changed') void qc.invalidateQueries({ queryKey: ['categories'] });
         if (ev.type === 'users.changed') void qc.invalidateQueries({ queryKey: ['users'] });
+        if (ev.type === 'orders.changed') {
+          for (const k of ['orders', 'order', 'station', 'cash', 'dashboard', 'print-jobs', 'printers', 'report']) void qc.invalidateQueries({ queryKey: [k] });
+        }
+        if (ev.type === 'printers.changed') {
+          for (const k of ['printers', 'print-jobs', 'dashboard']) void qc.invalidateQueries({ queryKey: [k] });
+        }
+        if (ev.type === 'finance.changed') {
+          for (const k of ['expenses', 'report', 'cash', 'dashboard']) void qc.invalidateQueries({ queryKey: [k] });
+        }
+        if (ev.type === 'settings.changed') {
+          for (const k of ['tax-rates', 'payment-methods']) void qc.invalidateQueries({ queryKey: [k] });
+        }
         if (ev.type === 'products.changed' || ev.type === 'inventory.changed') {
           for (const k of ['products', 'availability', 'ingredients', 'suppliers', 'movements', 'batches', 'production-preview']) {
             void qc.invalidateQueries({ queryKey: [k] });

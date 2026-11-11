@@ -81,7 +81,7 @@ export async function moveIngredient(
   let unitCost = ing.avgCostMinor;
   let value: bigint;
   let newAvg = ing.avgCostMinor;
-  if (type === 'RECEIVE' || (type === 'OPENING' && meta.receiveValueMinor !== undefined)) {
+  if (meta.receiveValueMinor !== undefined && delta.gt(0)) {
     const paid = meta.receiveValueMinor ?? 0n;
     value = paid;
     unitCost = delta.gt(0) ? c4(D(paid.toString()).div(delta)) : ZERO;
@@ -259,6 +259,10 @@ export interface SaleLineInput {
   productId: string;
   quantity: number;
   modifierIds?: string[];
+  /** Order line id — stored on each stock movement so a cancellation can reverse exactly. */
+  lineId?: string;
+  /** Offline sync: accept a product that has since been switched off. */
+  allowUnavailable?: boolean;
 }
 
 /**
@@ -281,7 +285,7 @@ export async function consumeForSale(tx: Tx, lines: SaleLineInput[], meta: { ref
   for (const l of lines) {
     const p = pMap.get(l.productId);
     if (!p || !p.isActive) throw new HttpError(404, 'NOT_FOUND', 'Product not found');
-    if (!p.isAvailable) throw new HttpError(409, 'UNAVAILABLE', `${p.name} is switched off`);
+    if (!p.isAvailable && !l.allowUnavailable) throw new HttpError(409, 'UNAVAILABLE', `${p.name} is switched off`);
     if (p.stockMode !== 'MADE_TO_ORDER') continue;
     for (const r of p.recipeLines) needs.set(r.ingredientId, (needs.get(r.ingredientId) ?? ZERO).plus(lineRequirement(r, p.recipeYield, l.quantity)));
     const mods = p.modifierGroups.flatMap((g) => g.modifiers).filter((m) => l.modifierIds?.includes(m.id) && m.ingredientId && m.quantity);
@@ -308,27 +312,46 @@ export async function consumeForSale(tx: Tx, lines: SaleLineInput[], meta: { ref
   }
   if (shortages.length) throw new InsufficientStockError('Not enough stock for this order', shortages);
 
-  const costs: { productId: string; costMinor: bigint }[] = [];
+  const costs: { productId: string; lineId?: string; tracked: boolean; costMinor: bigint }[] = [];
   for (const l of lines) {
     const p = pMap.get(l.productId)!;
+    const lm = { ...meta, refType: l.lineId ? 'ORDER_LINE' : meta.refType, refId: l.lineId ?? meta.refId };
     let cost = 0n;
     if (p.stockMode === 'BATCH' || p.stockMode === 'RESALE') {
-      const mv = await moveFinished(tx, p.id, 'SOLD', -l.quantity, meta);
+      const mv = await moveFinished(tx, p.id, 'SOLD', -l.quantity, lm);
       cost = -mv.valueMinor;
     } else if (p.stockMode === 'MADE_TO_ORDER') {
       for (const r of p.recipeLines) {
-        const mv = await moveIngredient(tx, r.ingredientId, 'SALE_CONSUME', lineRequirement(r, p.recipeYield, l.quantity).neg(), meta);
+        const mv = await moveIngredient(tx, r.ingredientId, 'SALE_CONSUME', lineRequirement(r, p.recipeYield, l.quantity).neg(), lm);
         cost += -mv.valueMinor;
       }
       const mods = p.modifierGroups.flatMap((g) => g.modifiers).filter((m) => l.modifierIds?.includes(m.id) && m.ingredientId && m.quantity);
       for (const m of mods) {
-        const mv = await moveIngredient(tx, m.ingredientId!, 'SALE_CONSUME', m.quantity!.mul(l.quantity).neg(), meta);
+        const mv = await moveIngredient(tx, m.ingredientId!, 'SALE_CONSUME', m.quantity!.mul(l.quantity).neg(), lm);
         cost += -mv.valueMinor;
       }
     } else {
       cost = BigInt((p.manualCostMinor ?? 0) * l.quantity);
     }
-    costs.push({ productId: p.id, costMinor: cost });
+    costs.push({ productId: p.id, lineId: l.lineId, tracked: p.stockMode !== 'UNTRACKED', costMinor: cost });
   }
   return costs;
+}
+
+/**
+ * Put the stock of a not-yet-prepared order line back (order cancelled before the kitchen
+ * started). Reverses exactly the movements recorded for that line, at their original cost.
+ */
+export async function restoreSaleLine(tx: Tx, lineId: string, meta: { actorId: string | null; reason: string }) {
+  const fin = await tx.finishedMovement.findMany({ where: { refType: 'ORDER_LINE', refId: lineId, type: 'SOLD' } });
+  const ing = await tx.stockMovement.findMany({ where: { refType: 'ORDER_LINE', refId: lineId, type: 'SALE_CONSUME' } });
+  await lockProducts(tx, fin.map((m) => m.productId));
+  await lockIngredients(tx, ing.map((m) => m.ingredientId));
+  for (const m of fin) {
+    await moveFinished(tx, m.productId, 'SALE_REVERSAL', -m.qtyDelta, { refType: 'ORDER_LINE', refId: lineId, actorId: meta.actorId, reason: meta.reason, incomingValueMinor: -m.valueMinor });
+  }
+  for (const m of ing) {
+    await moveIngredient(tx, m.ingredientId, 'SALE_REVERSAL', m.qtyDelta.neg(), { refType: 'ORDER_LINE', refId: lineId, actorId: meta.actorId, reason: meta.reason, receiveValueMinor: -m.valueMinor });
+  }
+  return fin.length + ing.length;
 }

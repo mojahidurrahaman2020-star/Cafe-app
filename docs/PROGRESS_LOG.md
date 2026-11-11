@@ -2,6 +2,40 @@
 
 Newest first. Each entry: what changed, why, and what was verified.
 
+## 2026-11-11 — Complete system (owner: "build the final app, no more phases")
+
+**Built**
+- Migration `pos_printing_finance`: tax rates, payment methods, cash sessions, orders, order
+  lines, payments, refunds, printers, print jobs, expense categories, expenses (+ CHECK
+  constraints, append-only payments/refunds, single open cash drawer).
+- POS: touch screen with category tabs and live "left" counts, options, notes, dine-in tables
+  / takeaway, discounts (manager/owner), owner-configured VAT, hold/resume, send & pay,
+  cash with change, card, bKash/Nagad with transaction ID, split payments, open/held/today
+  lists, cancel (stock restored vs waste), refunds, reprints, cash drawer reconciliation.
+- Kitchen and barista live screens (Start → Ready → Served, order age, late highlight).
+- Printing: three destinations, automatic split, ESC/POS over TCP 9100, 58/80 mm, auto-cut,
+  cash-drawer kick, idempotent jobs, no automatic duplicate printing, retries only before data
+  is sent, status probing, test print, labelled reprints, failure log, exact text preview.
+- Finance: expenses (voided, never deleted), reports with net sales, COGS from consumption,
+  losses, expenses, net profit estimate, stock purchases separate, payment/category/top items,
+  day/week/month series; PDF, Excel and CSV exports.
+- Owner dashboard with live figures; settings for tables, VAT/BIN line, tax rates, payment
+  methods, and per-device offline permission.
+- Offline order queue on tills with automatic upload and server-side conflict review.
+- Off-site backup copy script (rclone). Owner's guide.
+- Online demo extended with POS, stations, printers (preview), expenses and reports.
+
+**Problems found and fixed during verification**
+- Two identical submissions arriving at the same instant returned an error to the second
+  till → now both get the original result (orders, payments, refunds).
+- A duplicate payment waiting on the order lock saw "already paid" before recognising itself
+  → idempotency re-checked after acquiring the lock.
+- `exceljs` pulled in a `uuid` version with an advisory → pinned the fixed release; audit clean.
+- Cart dropped below the menu on landscape tablets → side-by-side down to 820 px.
+- Online demo used non-UUID sample ids, which the real validation rejected → fixed ids.
+
+**Verified:** TEST_RESULTS.md — 15 unit, 89 API, 28 browser tests; Docker; online demo.
+
 ## 2026-11-11 — Online demo for the owner
 
 The owner could not open the in-session preview, so a browser-only **online demo** was

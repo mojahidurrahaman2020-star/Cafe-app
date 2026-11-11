@@ -153,7 +153,7 @@ export function SettingsPage() {
             </Field>
           </div>
           <p className="muted">Preview: <b className="num" data-testid="currency-preview">{preview}</b></p>
-          <p className="muted small">Tax / VAT rates are configured with the POS module (Phase 3). No tax rate is assumed.</p>
+          <p className="muted small">Tax / VAT rates are set below. No tax rate is assumed until you add one.</p>
         </section>
 
         <section className="card card-pad stack" style={{ gap: 18 }}>
@@ -179,6 +179,14 @@ export function SettingsPage() {
           <div className="form-grid">
             <label className="check"><input type="checkbox" checked={draft.dineInEnabled} onChange={(e) => set('dineInEnabled', e.target.checked)} /> Dine-in enabled</label>
             <label className="check"><input type="checkbox" checked={draft.takeawayEnabled} onChange={(e) => set('takeawayEnabled', e.target.checked)} /> Takeaway enabled</label>
+          </div>
+          <div className="form-grid">
+            <Field label="Number of dine-in tables" htmlFor="s-tables" hint="0 = type the table number by hand" error={errors.tableCount}>
+              <input id="s-tables" className="input num" inputMode="numeric" value={draft.tableCount} onChange={(e) => /^\d{0,3}$/.test(e.target.value) && set('tableCount', Number(e.target.value || 0))} data-testid="settings-tables" />
+            </Field>
+            <Field label="VAT / BIN registration (printed on receipts)" htmlFor="s-bin" error={errors.taxRegistration}>
+              <input id="s-bin" className="input" maxLength={100} value={draft.taxRegistration} onChange={(e) => set('taxRegistration', e.target.value)} placeholder="e.g. BIN: 000000000-0000" />
+            </Field>
           </div>
           <Field label="Receipt footer" htmlFor="s-foot" error={errors.receiptFooter}>
             <textarea id="s-foot" className="input" maxLength={300} value={draft.receiptFooter} onChange={(e) => set('receiptFooter', e.target.value)} />

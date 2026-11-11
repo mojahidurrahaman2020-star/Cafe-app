@@ -18,6 +18,9 @@ import { healthRouter } from './modules/health/routes.js';
 import { inventoryRouter } from './modules/inventory/routes.js';
 import { productionRouter } from './modules/production/routes.js';
 import { productsRouter } from './modules/products/routes.js';
+import { posRouter } from './modules/pos/routes.js';
+import { printingRouter } from './modules/printing/routes.js';
+import { financeRouter } from './modules/finance/routes.js';
 import { settingsRouter } from './modules/settings/routes.js';
 import { usersRouter } from './modules/users/routes.js';
 
@@ -68,6 +71,9 @@ export function createApp() {
   api.use(inventoryRouter);
   api.use(productsRouter);
   api.use(productionRouter);
+  api.use(posRouter);
+  api.use(printingRouter);
+  api.use(financeRouter);
   api.use(notFoundHandler);
   app.use('/api', api);
 

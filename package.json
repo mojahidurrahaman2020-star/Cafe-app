@@ -24,5 +24,10 @@
     "test": "npm run build:shared && npm run test -w @bitebrew/shared && npm run test -w @bitebrew/server",
     "test:e2e": "node e2e/run-e2e.mjs",
     "start": "npm run start -w @bitebrew/server"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "11.1.1"
+    }
   }
 }

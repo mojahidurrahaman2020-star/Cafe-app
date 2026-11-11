@@ -70,32 +70,25 @@ All state-changing POS endpoints accept an **`Idempotency-Key`** header (UUID ge
 the device when the cashier presses the button). Re-sending the same key returns the
 original result instead of creating a second order/payment.
 
-### Phase 3 — POS & payments
-| Endpoint | Permission |
-|---|---|
-| `POST /orders` (idempotent; reserves/deducts stock atomically) | `pos.use` |
-| `POST /orders/:id/hold`, `/resume`, `/cancel` (stock restore or waste by line state) | `pos.use` / `orders.cancel` |
-| `POST /orders/:id/discounts` | `orders.discount` |
-| `POST /orders/:id/payments` (idempotent; split payments) | `pos.use` |
-| `POST /orders/:id/refunds` | `orders.refund` |
-| `GET /orders?date&status` | `orders.view` |
-| `GET/POST/PATCH /tax-rates`, `/payment-methods` | `settings.manage` |
-| `POST /cash-sessions/open`, `/close`, `GET /cash-sessions/:id/reconciliation` | `cash.reconcile` |
-| `POST /sync/batch` — offline queue upload (see OFFLINE.md) | `pos.use` |
+## Implemented (POS, stations, printing, finance)
 
-### Phase 4 — Stations & printing
-| Endpoint | Permission |
-|---|---|
-| `GET /stations/kitchen/queue`, `/stations/barista/queue`, `POST /order-lines/:id/status` | `kitchen.view` / `barista.view` |
-| `GET/POST/PATCH /printers`, `POST /printers/:id/test` | `printers.manage` |
-| `POST /orders/:id/reprint` (reason required, audited) | `orders.reprint` |
-| Agent-only (device token): `POST /print-agent/claim`, `POST /print-agent/jobs/:id/result`, `POST /print-agent/heartbeat` | print-agent credential |
-
-### Phase 5 — Finance & reports
-| Endpoint | Permission |
-|---|---|
-| `GET/POST /purchases` | `purchases.manage` |
-| `GET/POST/PATCH /expenses`, `/expense-categories` | `expenses.manage` |
-| `GET /reports/sales|cogs|expenses|profit|payments|categories?from&to&granularity=day|week|month` | `reports.view` |
-| `GET /reports/:name/export?format=csv|xlsx|pdf` | `reports.export` |
-| `GET /dashboard/summary?period=day|week|month` (extended KPIs) | `dashboard.view` |
+| Method & path | Permission | Purpose |
+|---|---|---|
+| `POST /orders` | `pos.use` (+ `orders.discount` for discounts) | Create (or `hold`) an order; server prices it, deducts stock atomically, queues tickets. Idempotent by `clientRequestId`; `replacesHeldOrderId` resumes a held order |
+| `GET /orders?date&status=ACTIVE|HELD|OPEN|COMPLETED|CANCELLED&needsReview=true` · `GET /orders/:id` | `orders.view` | Lists / detail |
+| `POST /orders/:id/send` | `pos.use` | Send a held order |
+| `POST /orders/:id/payments` | `pos.use` | Cash (tendered → change), card, mobile (reference required), split. Idempotent |
+| `POST /orders/:id/cancel` | `pos.use` (held) / `orders.cancel` (sent) | Restores stock for unstarted items, records waste otherwise |
+| `POST /orders/:id/refunds` | `orders.refund` | Never more than paid. Idempotent |
+| `POST /orders/:id/reprint` | `orders.reprint` | Labelled reprint with reason |
+| `POST /orders/:id/review` | `orders.cancel` | Clear an offline stock conflict |
+| `POST /sync/orders` | `pos.use` | Upload offline-queued orders (+ payments) |
+| `GET /stations/kitchen|barista` · `POST /stations/:s/orders/:id/advance` · `POST /order-lines/:id/status` | `kitchen.view` / `barista.view` | Live queues |
+| `GET/POST/PATCH /tax-rates`, `/payment-methods` | read: signed in · write: `settings.manage` | Configuration |
+| `GET /cash/current` · `POST /cash/open` · `POST /cash/close` · `GET /cash/sessions` | `pos.use` / `cash.reconcile` | Drawer & reconciliation |
+| `GET /printers` · `PATCH /printers/:id` · `POST /printers/:id/test` | signed in / `printers.manage` | Printer setup & status |
+| `GET /print-jobs` · `GET /print-jobs/:id/preview` · `POST /print-jobs/:id/retry|cancel` | signed in / `orders.reprint` | Queue, exact text preview |
+| `GET/POST/PATCH /expense-categories` · `GET/POST /expenses` · `POST /expenses/:id/void` | `expenses.manage` | Operating expenses |
+| `GET /reports/summary?from&to&granularity` | `reports.view` | Full financial report |
+| `GET /reports/export?from&to&format=csv|xlsx|pdf` | `reports.export` | Downloads |
+| `GET /dashboard/summary?period=day|week|month` | `dashboard.view` | Live dashboard |

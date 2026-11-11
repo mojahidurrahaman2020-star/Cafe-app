@@ -224,3 +224,77 @@ table.table { width: 100%; border-collapse: collapse; }
 .kv dt { color: var(--text-muted); }
 .kv dd { margin: 0; font-weight: 600; }
 .text-right { text-align: right; }
+
+/* ---------- POS ---------- */
+.pos { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.pos-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pos-head .tabs { flex: 1; min-width: 0; }
+.pos-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+.pos-menu { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.chips button { flex-shrink: 0; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--cream-300); background: var(--surface); font: 600 0.92rem var(--font-sans); color: var(--espresso-700); cursor: pointer; }
+.chips button[aria-pressed='true'] { background: var(--espresso-800); border-color: var(--espresso-800); color: var(--cream-50); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.tile { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 104px; padding: 12px; text-align: left; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow); cursor: pointer; font: inherit; color: inherit; transition: transform 0.05s, border-color 0.15s; }
+.tile:hover { border-color: var(--gold-400); }
+.tile:active { transform: scale(0.98); }
+.tile:disabled { opacity: 0.5; cursor: not-allowed; }
+.tile.out { background: var(--cream-200); }
+.tile-name { font-weight: 700; line-height: 1.2; }
+.tile-price { color: var(--espresso-700); font-weight: 700; margin-top: auto; }
+.tile-left { font-size: 0.75rem; font-weight: 800; color: var(--success); text-transform: uppercase; letter-spacing: 0.04em; }
+.tile-left.low { color: var(--warning); }
+.tile-left.out { color: var(--danger); }
+.pos-cart { position: sticky; top: calc(var(--topbar-h) + 12px); display: flex; flex-direction: column; gap: 10px; padding: 14px; max-height: calc(100dvh - var(--topbar-h) - 40px); }
+.cart-lines { flex: 1; overflow-y: auto; min-height: 120px; display: flex; flex-direction: column; }
+.cart-line { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.qty { display: flex; align-items: center; gap: 4px; }
+.qty button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--cream-300); background: var(--cream-100); font: 700 1.2rem var(--font-sans); cursor: pointer; color: var(--espresso-800); }
+.qty span { min-width: 26px; text-align: center; font-weight: 800; }
+.totals { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 2px dashed var(--cream-300); }
+.totals > div { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 0.92rem; }
+.totals .grand { color: var(--espresso-800); font-weight: 800; font-size: 1.3rem; }
+.table-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }
+.table-picker button { min-height: 44px; border-radius: 8px; border: 1px solid var(--cream-300); background: var(--surface); font: 700 1rem var(--font-num); cursor: pointer; color: var(--espresso-700); }
+.table-picker button[aria-pressed='true'] { background: var(--gold-500); border-color: var(--gold-500); color: var(--espresso-900); }
+@media (max-width: 1280px) {
+  .pos-grid { grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; }
+  .tiles { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); }
+  .tile { min-height: 96px; padding: 10px; }
+}
+/* Tablets held upright and phones: cart below the menu */
+@media (max-width: 820px) {
+  .pos-grid { grid-template-columns: 1fr; }
+  .pos-cart { position: static; max-height: none; }
+}
+
+/* ---------- Kitchen / barista display ---------- */
+.kds { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; align-items: start; }
+.ticket { background: var(--surface); border: 1px solid var(--border); border-top: 8px solid var(--warning); border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; }
+.ticket.preparing { border-top-color: var(--info); }
+.ticket.ready { border-top-color: var(--success); }
+.ticket.late { box-shadow: 0 0 0 3px var(--danger-bg), var(--shadow); }
+.ticket header { display: flex; align-items: baseline; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.ticket .no { font: 800 1.6rem var(--font-num); color: var(--espresso-800); }
+.ticket .age { margin-left: auto; font-weight: 700; color: var(--text-muted); }
+.ticket.late .age { color: var(--danger); }
+.ticket ul { list-style: none; margin: 0; padding: 8px 14px; display: flex; flex-direction: column; gap: 8px; }
+.ticket li b { font-size: 1.15rem; }
+.ticket li.ready b, .ticket li.served b { color: var(--success); }
+.ticket .mods { color: var(--espresso-700); font-weight: 600; }
+.ticket .note { color: var(--danger); font-weight: 700; padding: 0 14px 8px; }
+.ticket li .note { padding: 0; }
+.ticket > .btn { margin: 8px 14px 14px; min-height: 56px; font-size: 1.1rem; }
+
+/* ---------- Charts & misc ---------- */
+.chart { display: flex; align-items: flex-end; gap: 6px; height: 200px; overflow-x: auto; padding-top: 8px; }
+.bar-col { flex: 1 0 22px; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; }
+.bars { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; border-bottom: 1px solid var(--cream-300); }
+.bar { width: 45%; max-width: 22px; border-radius: 4px 4px 0 0; min-height: 1px; }
+.bar.sales, .legend.sales { background: var(--espresso-700); }
+.bar.expenses, .legend.expenses { background: var(--gold-400); }
+.bar-label { font-size: 0.7rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.legend { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: middle; margin: 0 4px 0 10px; }
+.meter { height: 10px; background: var(--cream-200); border-radius: 999px; overflow: hidden; }
+.meter span { display: block; height: 100%; background: var(--gold-500); border-radius: 999px; }
+.receipt-preview { background: #fff; color: #111; font: 13px/1.35 'Courier New', ui-monospace, monospace; padding: 16px; border: 1px dashed var(--cream-300); border-radius: 8px; overflow-x: auto; white-space: pre; margin: 0; }

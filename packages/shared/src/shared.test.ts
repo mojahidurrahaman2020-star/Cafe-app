@@ -87,3 +87,26 @@ describe('units', () => {
     expect(formatQty(1500, 'ml')).toBe('1,500 mL');
   });
 });
+
+import { discountFrom, priceOrder } from './index.js';
+describe('order pricing', () => {
+  it('no tax configured → total equals subtotal minus discount', () => {
+    expect(priceOrder([25000, 22000], 0, [])).toMatchObject({ subtotalMinor: 47000, taxMinor: 0, totalMinor: 47000 });
+    expect(priceOrder([25000], 5000, [])).toMatchObject({ discountMinor: 5000, totalMinor: 20000 });
+  });
+  it('inclusive VAT is extracted, total unchanged', () => {
+    const r = priceOrder([11500], 0, [{ id: 'v', name: 'VAT', rateBp: 1500, inclusive: true }]);
+    expect(r.totalMinor).toBe(11500);
+    expect(r.taxMinor).toBe(1500); // 11500 / 1.15 = 10000 net, 15 % = 1500
+  });
+  it('exclusive VAT is added on top, after the discount', () => {
+    const r = priceOrder([10000], 1000, [{ id: 'v', name: 'VAT', rateBp: 750, inclusive: false }]);
+    expect(r.taxMinor).toBe(675);
+    expect(r.totalMinor).toBe(9675);
+  });
+  it('discount helpers', () => {
+    expect(discountFrom({ type: 'PERCENT', value: 10 }, 47000)).toBe(4700);
+    expect(discountFrom({ type: 'AMOUNT', value: 999999 }, 47000)).toBe(47000);
+    expect(discountFrom(null, 47000)).toBe(0);
+  });
+});

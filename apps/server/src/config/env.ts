@@ -14,6 +14,8 @@ const schema = z.object({
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   WEB_DIST_DIR: z.string().optional(),
+  /** Deliver print jobs to network printers from this server (on by default). */
+  PRINT_SERVICE: z.enum(['on', 'off']).default('on'),
 });
 
 const parsed = schema.safeParse(process.env);

@@ -13,7 +13,12 @@ import { InventoryPage } from './pages/InventoryPage';
 import { ProductionPage } from './pages/ProductionPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { LoginPage } from './pages/LoginPage';
-import { PlannedModulePage } from './pages/PlannedModulePage';
+import { PosPage } from './pages/PosPage';
+import { StationPage } from './pages/StationPage';
+import { PrintersPage } from './pages/PrintersPage';
+import { ExpensesPage } from './pages/ExpensesPage';
+import { ReportsPage } from './pages/ReportsPage';
+import { SettingsExtras } from './pages/SettingsExtras';
 import { SettingsPage } from './pages/SettingsPage';
 import { UsersPage } from './pages/UsersPage';
 
@@ -52,20 +57,20 @@ export function App() {
         <Route index element={<Home />} />
         <Route path="dashboard" element={<Guard permission="dashboard.view"><DashboardPage /></Guard>} />
         <Route path="menu" element={<Guard permission="menu.view"><CategoriesPage /></Guard>} />
-        <Route path="settings" element={<Guard permission="settings.view"><SettingsPage /></Guard>} />
+        <Route path="settings" element={<Guard permission="settings.view"><SettingsPage /><SettingsExtras /></Guard>} />
         <Route path="users" element={<Guard permission="users.view"><UsersPage /></Guard>} />
         <Route path="audit" element={<Guard permission="audit.view"><AuditPage /></Guard>} />
         <Route path="account" element={<AccountPage />} />
-        <Route path="pos" element={<Guard permission="pos.use"><PlannedModulePage moduleKey="pos" /></Guard>} />
-        <Route path="kitchen" element={<Guard permission="kitchen.view"><PlannedModulePage moduleKey="kitchen" /></Guard>} />
-        <Route path="barista" element={<Guard permission="barista.view"><PlannedModulePage moduleKey="barista" /></Guard>} />
+        <Route path="pos" element={<Guard permission="pos.use"><PosPage /></Guard>} />
+        <Route path="kitchen" element={<Guard permission="kitchen.view"><StationPage key="kitchen" station="kitchen" /></Guard>} />
+        <Route path="barista" element={<Guard permission="barista.view"><StationPage key="barista" station="barista" /></Guard>} />
         <Route path="availability" element={<Guard permission="menu.view"><AvailabilityPage /></Guard>} />
         <Route path="products" element={<Guard permission="menu.view"><ProductsPage /></Guard>} />
         <Route path="inventory" element={<Guard permission="inventory.view"><InventoryPage /></Guard>} />
         <Route path="production" element={<Guard permission="production.manage"><ProductionPage /></Guard>} />
-        <Route path="expenses" element={<Guard permission="expenses.manage"><PlannedModulePage moduleKey="expenses" /></Guard>} />
-        <Route path="reports" element={<Guard permission="reports.view"><PlannedModulePage moduleKey="reports" /></Guard>} />
-        <Route path="printers" element={<Guard permission="printers.manage"><PlannedModulePage moduleKey="printers" /></Guard>} />
+        <Route path="expenses" element={<Guard permission="expenses.manage"><ExpensesPage /></Guard>} />
+        <Route path="reports" element={<Guard permission="reports.view"><ReportsPage /></Guard>} />
+        <Route path="printers" element={<Guard permission="printers.manage"><PrintersPage /></Guard>} />
         <Route
           path="*"
           element={

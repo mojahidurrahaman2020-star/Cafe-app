@@ -1,8 +1,12 @@
 # Bite & Brew — Three-Printer Architecture
 
-> **Status: designed, not built (Phase 4). No physical printing has been tested.**
-> Nothing in this repository claims to print until it has been verified on the
-> actual printers the café buys.
+> **Status: built and tested against a simulated network printer. Not yet tested on real
+> printers** (none purchased). Physical printing is not claimed to work until verified with
+> the café's printers using the test procedure below.
+>
+> Implementation: `apps/server/src/modules/printing/` (queue, ESC/POS, print service) and
+> `packages/shared/src/printing.ts` (receipt/ticket layout). The print service runs inside the
+> café server (env `PRINT_SERVICE=on`, default) and talks raw TCP to each printer's IP.
 
 ## 1. Destinations
 
@@ -55,7 +59,7 @@ flowchart LR
 
 An order with no drinks produces no barista job (and vice versa).
 
-## 3. Why a print agent
+## 3. Why a print service on the café server
 
 Browsers on tablets cannot open raw TCP sockets or USB devices. A small Node service
 (the **print agent**) runs on the café server PC (or any always-on PC on the LAN):

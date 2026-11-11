@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Permission, SessionUser } from '@bitebrew/shared';
-import { get, post } from '../api/client';
+import { get, NetworkError, post } from '../api/client';
+import { lastUser, rememberUser } from '../lib/offlineQueue';
 
 interface AuthState {
   user: SessionUser | null;
@@ -18,7 +19,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const me = useQuery({
     queryKey: ['me'],
     queryFn: async () => {
-      return (await get<{ user: SessionUser | null }>('/auth/me')).user;
+      try {
+        const u = (await get<{ user: SessionUser | null }>('/auth/me')).user;
+        rememberUser(u);
+        return u;
+      } catch (e) {
+        // Server unreachable: keep the till usable for offline orders with the last signed-in user.
+        if (e instanceof NetworkError) return lastUser();
+        throw e;
+      }
     },
     staleTime: 60_000,
     retry: false,
@@ -39,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // (clearing it would detach the observer and the UI would not update).
       qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'me' });
       qc.setQueryData(['me'], user);
+      rememberUser(user);
       return user;
     },
     [qc],
@@ -47,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     await post('/auth/logout').catch(() => undefined);
     qc.setQueryData(['me'], null);
+    rememberUser(null);
     qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'me' });
   }, [qc]);
 

@@ -5,20 +5,26 @@ stations, raw & finished-goods inventory, three-printer ticket routing, and fina
 Currency BDT (৳), timezone Asia/Dhaka. Runs in the browser on Windows PCs and touchscreen
 tablets, all connected to one central PostgreSQL database.
 
-**Current status: Phase 2 (Menu items & inventory) complete** — see [docs/ROADMAP.md](docs/ROADMAP.md)
-and [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md).
+**Current status: complete café system** — see [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md)
+and the [Owner's Guide](docs/OWNER_GUIDE.md).
 
 | Area | Status |
 |---|---|
-| Secure login, 5 roles, permissions, audit log | ✅ Phase 1 |
-| Business settings (BDT, Asia/Dhaka), menu categories | ✅ Phase 1 |
-| Owner dashboard layout, live updates, OFFLINE indicator, PWA | ✅ Phase 1 |
-| Menu items, recipes, options, photos, ingredients & suppliers, stock ledger, batch production, live availability | ✅ Phase 2 |
-| POS, payments (cash/card/bKash/Nagad), VAT, refunds | Phase 3 |
-| Kitchen/barista screens, three thermal printers | Phase 4 |
-| Purchases, expenses, profit reports, exports | Phase 5 |
-| Offline order queue on tills & sync | Phase 3 |
-| Automatic online copy & owner remote view | Phase 6 |
+| Secure login, 5 roles, permissions, audit log | ✅ |
+| Business settings (BDT ৳, Asia/Dhaka), VAT rates, payment methods, tables | ✅ |
+| Menu categories & items, recipes, options, photos | ✅ |
+| Ingredients, suppliers, deliveries, waste/spoilage/counts, stock ledger | ✅ |
+| Batch production; live "what can we sell now" per item and category | ✅ |
+| POS: dine-in/takeaway, tables, options, notes, discounts, VAT, held orders | ✅ |
+| Payments: cash (change), card, bKash, Nagad, split; refunds; cancellations | ✅ |
+| Cash drawer open/close with reconciliation | ✅ |
+| Kitchen & barista live screens | ✅ |
+| Three printers (receipt / barista / kitchen), auto-split, ESC/POS, reprint, status | ✅ built — **not yet tested on real printers** |
+| Expenses, financial reports (day/week/month/custom), PDF / Excel / CSV | ✅ |
+| Owner dashboard with live figures | ✅ |
+| Offline order queue on tills with sync & conflict review | ✅ |
+| Daily backups, restore, off-site copy script | ✅ (off-site needs your cloud account) |
+| Live online replica + remote owner dashboard | Not built (use VPN to the café server — see DEPLOYMENT.md) |
 
 ## Try it online (no installation)
 
@@ -92,6 +98,15 @@ npm test            # unit tests + API tests on a throwaway database (needs a ro
 npm run test:e2e    # browser acceptance tests — app must be running with the demo seed
 ```
 
+## Remaining / not included
+
+- **Physical printer test** — required before go-live; follow the checklist in docs/PRINTING.md.
+- **Bangla text on thermal printers** — printers print `Tk` for ৳ and `?` for Bangla letters;
+  bitmap printing can be added after testing the purchased printers.
+- **Live online replica / remote dashboard** — owners reach the café server remotely through a
+  VPN (Tailscale/WireGuard); off-site safety is covered by the backup copy script.
+- PIN quick-switch on shared tablets, load testing with every device at once.
+
 ## Production
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Docker Compose (PostgreSQL + app + daily
@@ -108,7 +123,8 @@ backups) on an always-on PC in the café, HTTPS via Caddy, restore procedure.
 | [PRINTING.md](docs/PRINTING.md) | Three-printer architecture, **printer compatibility checklist** |
 | [OFFLINE.md](docs/OFFLINE.md) | Offline strategy and its limitations |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deployment architecture, backups, recovery |
-| [ROADMAP.md](docs/ROADMAP.md) | Phases 1–6 |
+| [OWNER_GUIDE.md](docs/OWNER_GUIDE.md) | Day-one setup and daily routine |
+| [ROADMAP.md](docs/ROADMAP.md) | How it was built, what remains |
 | [TEST_RESULTS.md](docs/TEST_RESULTS.md) | Actual test results |
 | [PROGRESS_LOG.md](docs/PROGRESS_LOG.md) | Development log |
 | [adr/](docs/adr) | Architecture decision records |

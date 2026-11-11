@@ -69,7 +69,7 @@ async function noHorizontalOverflow(page) {
 
 const unique = `E2E ${Date.now().toString(36)}`;
 
-console.log(`\nAcceptance tests (Phases 1–2) against ${BASE}\n`);
+console.log(`\nAcceptance tests against ${BASE}\n`);
 
 await test('application starts: login page loads and health endpoint reports database up', async () => {
   const { page, ctx } = await newSession();
@@ -324,8 +324,118 @@ await test('P2 dashboard shows live stock value, low-stock and sold-out counts',
   for (const id of ['dash-low-stock', 'dash-sold-out']) assert(/^\d+$/.test((await p.textContent(`[data-testid=${id}]`)).trim()), id);
 });
 
+
+// ---------------- POS, stations, finance ----------------
+await test('POS: cashier takes a dine-in order with options, pays cash with change; kitchen and barista get only their items live', async () => {
+  const kitchen = await newSession(devices['iPad (gen 7) landscape']);
+  await login(kitchen.page, 'kitchen');
+  await kitchen.page.goto(`${BASE}/kitchen`);
+  await kitchen.page.waitForSelector('[data-testid=station-kitchen]');
+  await kitchen.page.waitForFunction(() => document.querySelector('[data-testid=connection-status]')?.textContent?.includes('ONLINE'));
+  const before = await kitchen.page.$$eval('[data-testid=kds-ticket]', (t) => t.length);
+
+  const till = await newSession(devices['iPad (gen 7) landscape']);
+  await login(till.page, 'cashier');
+  const p = till.page;
+  await p.waitForSelector('[data-testid=pos-tile]');
+  await p.locator('[data-testid=pos-tile]', { hasText: 'Chicken Tehari' }).click();
+  await p.locator('[data-testid=pos-tile]', { hasText: 'Chicken Tehari' }).click();
+  await p.locator('[data-testid=pos-tile]', { hasText: /^Latte/ }).click();
+  await p.waitForSelector('[data-testid=options-add]');
+  await p.locator('.modal button', { hasText: 'Extra shot' }).click();
+  await p.click('[data-testid=options-add]');
+  await p.click('[data-testid=service-DINE_IN]');
+  await p.click('[data-testid=table-3]');
+  const total = (await p.textContent('[data-testid=cart-total]')).trim();
+  assert(total === '৳710.00', `cart total ${total}`); // 2×220 + (220+50)
+  await p.click('[data-testid=send-order]');
+  await p.waitForSelector('[data-testid=payment-confirm]');
+  await p.click('[data-testid=pay-Cash]');
+  await p.fill('[data-testid=pay-tendered]', '1000');
+  await p.click('[data-testid=payment-confirm]');
+  await p.waitForSelector('[data-testid=payment-complete]');
+  assert((await p.textContent('[data-testid=change-due]')).trim() === '৳290.00', 'wrong change');
+  await p.screenshot({ path: `${SHOTS}/10-pos-paid.png` });
+  await p.click('[data-testid=payment-done]');
+
+  await kitchen.page.waitForFunction((n) => document.querySelectorAll('[data-testid=kds-ticket]').length === n + 1, before, { timeout: 8000 });
+  const ticket = (await kitchen.page.locator('[data-testid=kds-ticket]').last().textContent()).replace(/\s+/g, ' ');
+  assert(ticket.includes('2 × Chicken Tehari') && ticket.includes('Table 3') && !ticket.includes('Latte'), `kitchen ticket: ${ticket}`);
+  await kitchen.page.screenshot({ path: `${SHOTS}/11-kitchen.png` });
+  await kitchen.page.locator('[data-testid=kds-ticket]').last().locator('[data-testid=kds-advance]').click();
+  await kitchen.page.waitForFunction(() => [...document.querySelectorAll('[data-testid=kds-advance]')].some((b) => b.textContent.includes('Ready')));
+  const barista = await newSession();
+  await login(barista.page, 'barista');
+  await barista.page.goto(`${BASE}/barista`);
+  await barista.page.waitForSelector('[data-testid=kds-ticket]');
+  const bt = (await barista.page.locator('[data-testid=kds-ticket]').last().textContent()).replace(/\s+/g, ' ');
+  assert(bt.includes('Latte') && bt.includes('Extra shot') && !bt.includes('Tehari'), `barista ticket: ${bt}`);
+  await Promise.all([kitchen.ctx.close(), till.ctx.close(), barista.ctx.close()]);
+});
+
+await test('POS: hold an order, then resume and send it', async () => {
+  const till = await newSession({ viewport: { width: 1366, height: 768 } });
+  await login(till.page, 'cashier');
+  const p = till.page;
+  await p.waitForSelector('[data-testid=pos-tile]');
+  await p.locator('[data-testid=pos-tile]', { hasText: 'Lemon Tea' }).click();
+  await p.click('[data-testid=hold-order]');
+  await p.waitForSelector('.toast.success');
+  await p.click('[data-testid=tab-held]');
+  await p.waitForSelector('[data-testid=order-row]');
+  await p.locator('[data-testid=order-row]').first().locator('button', { hasText: 'Resume' }).click();
+  await p.waitForFunction(() => document.querySelector('[data-testid=cart]')?.textContent.includes('Lemon Tea'));
+  await p.click('[data-testid=send-order]');
+  await p.waitForSelector('[data-testid=payment-confirm]');
+  await p.keyboard.press('Escape'); // pay later
+  await p.click('[data-testid=tab-open]');
+  await p.waitForSelector('[data-testid=order-row]');
+  await till.ctx.close();
+});
+
+await test('Owner: dashboard shows live sales, orders, kitchen/barista pending and printer status', async () => {
+  const o = await newSession({ viewport: { width: 1366, height: 768 } });
+  await login(o.page, 'owner');
+  await o.page.waitForSelector('[data-testid=dash-sales]');
+  const sales = (await o.page.textContent('[data-testid=dash-sales]')).trim();
+  assert(/^৳[\d,]+\.\d{2}$/.test(sales) && sales !== '৳0.00', `sales ${sales}`);
+  assert(Number((await o.page.textContent('[data-testid=dash-orders]')).trim()) >= 2, 'orders count');
+  await o.page.waitForSelector('[data-testid=dash-printers]');
+  await o.page.click('[data-testid=period-month]');
+  await o.page.waitForSelector('[data-testid=dash-top] td');
+  await o.page.screenshot({ path: `${SHOTS}/12-dashboard-live.png`, fullPage: true });
+  await o.ctx.close();
+});
+
+await test('Owner: VAT rate, expense, report and printer preview work end to end', async () => {
+  const o = await newSession({ viewport: { width: 1366, height: 900 } });
+  await login(o.page, 'owner');
+  const p = o.page;
+  await p.goto(`${BASE}/expenses`);
+  await p.waitForSelector('[data-testid=expense-category]');
+  const cat = await p.$eval('[data-testid=expense-category]', (s) => [...s.options].find((x) => x.textContent === 'Electricity').value);
+  await p.selectOption('[data-testid=expense-category]', cat);
+  await p.fill('[data-testid=expense-amount]', '1500');
+  await p.click('[data-testid=expense-save]');
+  await p.waitForSelector('[data-testid=expenses-table] >> text=Electricity');
+  await p.goto(`${BASE}/reports`);
+  await p.waitForSelector('[data-testid=report-summary]');
+  assert((await p.textContent('[data-testid=reports-page]')).includes('Electricity'), 'expense missing from report');
+  await p.screenshot({ path: `${SHOTS}/13-reports.png`, fullPage: true });
+  await p.goto(`${BASE}/printers`);
+  await p.waitForSelector('[data-testid=print-jobs]');
+  await p.locator('[data-testid=print-jobs] button', { hasText: 'View' }).first().click();
+  await p.waitForSelector('[data-testid=print-preview]');
+  assert((await p.textContent('[data-testid=print-preview]')).length > 20, 'empty preview');
+  await p.keyboard.press('Escape');
+  await p.goto(`${BASE}/settings`);
+  await p.waitForSelector('[data-testid=tax-rates]');
+  assert(await p.isVisible('[data-testid=this-device]'), 'device section missing');
+  await o.ctx.close();
+});
+
 // ---------------- Role permissions in the UI ----------------
-await test('cashier: lands on POS, sees no owner areas, cannot manage the menu', async () => {
+await test('cashier: lands on the POS, sees no owner areas, cannot manage the menu', async () => {
   const { page, ctx } = await newSession();
   await login(page, 'cashier');
   assert(page.url().endsWith('/pos'), `cashier landed on ${page.url()}`);

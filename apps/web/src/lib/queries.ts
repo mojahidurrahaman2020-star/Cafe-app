@@ -55,3 +55,28 @@ export const useMovements = (params: { kind?: 'INGREDIENT' | 'FINISHED'; itemId?
 
 /** Query keys refreshed after any stock change. */
 export const STOCK_KEYS = [['ingredients'], ['products'], ['availability'], ['movements'], ['batches'], ['dashboard'], ['product']] as const;
+
+// ─────────── POS / finance ───────────
+import type { CashSessionDTO, OrderDTO, PaymentMethodDTO, PrinterDTO, PrintJobDTO, TaxRateDTO } from '@bitebrew/shared';
+
+export const usePaymentMethods = () =>
+  useQuery({ queryKey: ['payment-methods'], queryFn: async () => (await get<{ paymentMethods: PaymentMethodDTO[] }>('/payment-methods')).paymentMethods, staleTime: 5 * 60_000 });
+export const useTaxRates = () =>
+  useQuery({ queryKey: ['tax-rates'], queryFn: async () => (await get<{ taxRates: TaxRateDTO[] }>('/tax-rates')).taxRates, staleTime: 5 * 60_000 });
+export const useOrders = (params: { date?: string; status?: string; needsReview?: boolean }, enabled = true) => {
+  const qs = new URLSearchParams();
+  if (params.date) qs.set('date', params.date);
+  if (params.status) qs.set('status', params.status);
+  if (params.needsReview) qs.set('needsReview', 'true');
+  return useQuery({ queryKey: ['orders', params], queryFn: async () => (await get<{ orders: OrderDTO[]; businessDate: string | null }>(`/orders?${qs}`)), enabled });
+};
+export const useCashSession = () =>
+  useQuery({ queryKey: ['cash'], queryFn: async () => (await get<{ session: CashSessionDTO | null }>('/cash/current')).session });
+export const usePrinters = () =>
+  useQuery({ queryKey: ['printers'], queryFn: async () => (await get<{ printers: PrinterDTO[] }>('/printers')).printers, refetchInterval: 30_000 });
+export const usePrintJobs = (params: { status?: string; orderId?: string; limit?: number } = {}) => {
+  const qs = new URLSearchParams({ limit: String(params.limit ?? 50) });
+  if (params.status) qs.set('status', params.status);
+  if (params.orderId) qs.set('orderId', params.orderId);
+  return useQuery({ queryKey: ['print-jobs', params], queryFn: async () => (await get<{ jobs: PrintJobDTO[] }>(`/print-jobs?${qs}`)).jobs });
+};

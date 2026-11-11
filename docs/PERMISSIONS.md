@@ -3,7 +3,7 @@
 _Generated from `packages/shared/src/roles.ts` by `scripts/gen-permissions-doc.mjs`. Do not edit by hand._
 
 The server checks these permissions on every request; the interface only hides what a role cannot use.
-Permissions marked ● are enforced by built endpoints (Phases 1–2); the rest are declared now and enforced when their module ships.
+Every permission (●) is enforced by the server.
 `reports.view` currently controls who can see costs, stock values and margins.
 
 | Permission | Description | Owner | Manager | Cashier | Barista | Kitchen staff |
@@ -16,23 +16,23 @@ Permissions marked ● are enforced by built endpoints (Phases 1–2); the rest 
 | ● `users.view` | See staff accounts | ✅ | ✅ | — | — | — |
 | ● `users.manage` | Create / edit / deactivate staff (only lower roles) | ✅ | ✅ | — | — | — |
 | ● `audit.view` | Read the audit log | ✅ | ✅ | — | — | — |
-| `pos.use` | Take orders and payments | ✅ | ✅ | ✅ | — | — |
-| `orders.view` | See orders | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `orders.discount` | Apply discounts | ✅ | ✅ | — | — | — |
-| `orders.cancel` | Cancel orders | ✅ | ✅ | — | — | — |
-| `orders.refund` | Issue refunds | ✅ | ✅ | — | — | — |
-| `orders.reprint` | Reprint receipts / tickets (logged) | ✅ | ✅ | ✅ | — | — |
-| `cash.reconcile` | Open / close cash drawer, reconcile | ✅ | ✅ | — | — | — |
-| `kitchen.view` | Kitchen ticket queue | ✅ | ✅ | — | — | ✅ |
-| `barista.view` | Barista ticket queue | ✅ | ✅ | — | ✅ | — |
+| ● `pos.use` | Take orders and payments | ✅ | ✅ | ✅ | — | — |
+| ● `orders.view` | See orders | ✅ | ✅ | ✅ | ✅ | ✅ |
+| ● `orders.discount` | Apply discounts | ✅ | ✅ | — | — | — |
+| ● `orders.cancel` | Cancel orders | ✅ | ✅ | — | — | — |
+| ● `orders.refund` | Issue refunds | ✅ | ✅ | — | — | — |
+| ● `orders.reprint` | Reprint receipts / tickets (logged) | ✅ | ✅ | ✅ | — | — |
+| ● `cash.reconcile` | Open / close cash drawer, reconcile | ✅ | ✅ | — | — | — |
+| ● `kitchen.view` | Kitchen ticket queue | ✅ | ✅ | — | — | ✅ |
+| ● `barista.view` | Barista ticket queue | ✅ | ✅ | — | ✅ | — |
 | ● `inventory.view` | See stock levels & movements | ✅ | ✅ | — | ✅ | ✅ |
 | ● `inventory.adjust` | Add/edit ingredients; record waste, spoilage, corrections, counts | ✅ | ✅ | — | — | — |
 | ● `production.manage` | Record batch preparation | ✅ | ✅ | — | — | ✅ |
 | ● `purchases.manage` | Receive deliveries (stock in with cost), manage suppliers | ✅ | ✅ | — | — | — |
-| `expenses.manage` | Record operating expenses | ✅ | ✅ | — | — | — |
+| ● `expenses.manage` | Record operating expenses | ✅ | ✅ | — | — | — |
 | ● `reports.view` | Financial reports | ✅ | ✅ | — | — | — |
-| `reports.export` | Export PDF / CSV / Excel | ✅ | ✅ | — | — | — |
-| `printers.manage` | Configure printers, test print | ✅ | ✅ | — | — | — |
+| ● `reports.export` | Export PDF / CSV / Excel | ✅ | ✅ | — | — | — |
+| ● `printers.manage` | Configure printers, test print | ✅ | ✅ | — | — | — |
 
 ## Additional rules
 

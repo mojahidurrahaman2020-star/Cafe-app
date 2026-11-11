@@ -30,16 +30,14 @@ const describe = {
   'reports.export': 'Export PDF / CSV / Excel',
   'printers.manage': 'Configure printers, test print',
 };
-const active = new Set(['dashboard.view', 'settings.view', 'settings.manage', 'menu.view', 'menu.manage', 'users.view', 'users.manage', 'audit.view',
-  // Phase 2
-  'inventory.view', 'inventory.adjust', 'production.manage', 'purchases.manage', 'reports.view']);
+const active = new Set(PERMISSIONS);
 
 let md = `# Bite & Brew — Roles & Permission Matrix
 
 _Generated from \`packages/shared/src/roles.ts\` by \`scripts/gen-permissions-doc.mjs\`. Do not edit by hand._
 
 The server checks these permissions on every request; the interface only hides what a role cannot use.
-Permissions marked ● are enforced by built endpoints (Phases 1–2); the rest are declared now and enforced when their module ships.
+Every permission (●) is enforced by the server.
 \`reports.view\` currently controls who can see costs, stock values and margins.
 
 | Permission | Description | ${ROLES.map((r) => ROLE_LABELS[r]).join(' | ')} |

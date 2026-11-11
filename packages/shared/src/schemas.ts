@@ -97,6 +97,8 @@ export const settingsUpdateSchema = z.object({
   dineInEnabled: z.boolean().optional(),
   takeawayEnabled: z.boolean().optional(),
   receiptFooter: z.string().trim().max(300).optional(),
+  tableCount: z.number().int().min(0).max(500).optional(),
+  taxRegistration: z.string().trim().max(100).optional(),
   version: z.number().int().nonnegative(),
 });
 export type SettingsUpdateInput = z.infer<typeof settingsUpdateSchema>;

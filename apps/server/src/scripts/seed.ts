@@ -21,8 +21,35 @@ export const STARTING_CATEGORIES: { name: string; group: MenuGroup; station: Pre
   { name: 'Desserts & Sweets', group: 'DESSERTS', station: 'KITCHEN' },
 ];
 
+export const DEFAULT_PAYMENT_METHODS = [
+  { name: 'Cash', kind: 'CASH', requiresReference: false },
+  { name: 'Card', kind: 'CARD', requiresReference: false },
+  { name: 'bKash', kind: 'MOBILE', requiresReference: true },
+  { name: 'Nagad', kind: 'MOBILE', requiresReference: true },
+] as const;
+
+export const DEFAULT_EXPENSE_CATEGORIES = ['Rent', 'Electricity', 'Water', 'Internet', 'Salaries', 'Repairs', 'Transportation', 'Cleaning', 'Marketing', 'Other expenses'];
+
 export async function seedBase() {
   await getSettings();
+  if ((await prisma.paymentMethod.count()) === 0) {
+    for (const [i, m] of DEFAULT_PAYMENT_METHODS.entries()) {
+      await prisma.paymentMethod.create({ data: { ...m, normalizedName: normalizeName(m.name), sortOrder: i * 10 } });
+    }
+  }
+  if ((await prisma.expenseCategory.count()) === 0) {
+    for (const [i, name] of DEFAULT_EXPENSE_CATEGORIES.entries()) {
+      await prisma.expenseCategory.create({ data: { name, normalizedName: normalizeName(name), sortOrder: i * 10 } });
+    }
+  }
+  const printers = [
+    { role: 'RECEIPT', name: 'Receipt printer', paperWidthMm: 80, openDrawer: true },
+    { role: 'BARISTA', name: 'Barista printer', paperWidthMm: 80, openDrawer: false },
+    { role: 'KITCHEN', name: 'Kitchen printer', paperWidthMm: 80, openDrawer: false },
+  ] as const;
+  for (const p of printers) {
+    if (!(await prisma.printer.findUnique({ where: { role: p.role } }))) await prisma.printer.create({ data: p });
+  }
   const already = await prisma.menuCategory.count();
   let created = 0;
   if (already === 0) {

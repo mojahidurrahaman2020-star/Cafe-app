@@ -102,6 +102,10 @@ model BusinessSettings {
   dineInEnabled        Boolean        @default(true) @map("dine_in_enabled")
   takeawayEnabled      Boolean        @default(true) @map("takeaway_enabled")
   receiptFooter        String         @default("Thank you for visiting Bite & Brew!") @map("receipt_footer") @db.VarChar(300)
+  /// Number of dine-in tables shown on the POS (0 = type the table number freely).
+  tableCount           Int            @default(12) @map("table_count")
+  /// Optional VAT/BIN registration text printed on receipts.
+  taxRegistration      String         @default("") @map("tax_registration") @db.VarChar(100)
   version              Int            @default(0)
   updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
   updatedById          String?        @map("updated_by_id") @db.Uuid
@@ -311,6 +315,7 @@ model Product {
   finishedMovements FinishedMovement[]
   batches           ProductionBatch[]
   image             ProductImage?
+  orderLines        OrderLine[]
 
   @@index([categoryId, sortOrder])
   @@map("products")
@@ -421,4 +426,322 @@ model ProductionBatch {
   @@index([productId, preparedAt])
   @@index([preparedAt])
   @@map("production_batches")
+}
+
+// ───────────────────────────── POS, payments, stations, printing, finance ─────────────────────────────
+
+enum ServiceType {
+  DINE_IN
+  TAKEAWAY
+}
+
+enum OrderStatus {
+  HELD
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum PrepStatus {
+  PENDING
+  PREPARING
+  READY
+  SERVED
+  CANCELLED
+}
+
+/// What happened to the stock of an order line.
+enum LineStockState {
+  NOT_TRACKED
+  CONSUMED
+  RESTORED
+  WASTED
+  /// Offline order synced after the stock had run out — needs manager review.
+  CONFLICT
+}
+
+enum PaymentKind {
+  CASH
+  CARD
+  MOBILE
+  OTHER
+}
+
+enum PrinterRole {
+  RECEIPT
+  BARISTA
+  KITCHEN
+}
+
+enum PrintJobStatus {
+  PENDING
+  PRINTING
+  PRINTED
+  FAILED
+  CANCELLED
+}
+
+enum PrintJobKind {
+  RECEIPT
+  TICKET
+  TEST
+}
+
+/// Owner-configured tax/VAT rates. No rate exists until the owner adds one.
+model TaxRate {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(60)
+  /// Basis points: 750 = 7.5 %.
+  rateBp    Int      @map("rate_bp")
+  /// true: menu prices already include this tax. false: added on top.
+  inclusive Boolean  @default(true)
+  isActive  Boolean  @default(true) @map("is_active")
+  version   Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("tax_rates")
+}
+
+model PaymentMethod {
+  id                String      @id @default(uuid()) @db.Uuid
+  name              String      @db.VarChar(40)
+  normalizedName    String      @unique @map("normalized_name") @db.VarChar(40)
+  kind              PaymentKind
+  /// e.g. bKash / Nagad transaction id, card slip number. Never card numbers.
+  requiresReference Boolean     @default(false) @map("requires_reference")
+  isActive          Boolean     @default(true) @map("is_active")
+  sortOrder         Int         @default(0) @map("sort_order")
+  version           Int         @default(0)
+
+  payments Payment[]
+  refunds  Refund[]
+
+  @@map("payment_methods")
+}
+
+model CashSession {
+  id                String    @id @default(uuid()) @db.Uuid
+  openedById        String    @map("opened_by_id") @db.Uuid
+  openedAt          DateTime  @default(now()) @map("opened_at") @db.Timestamptz(3)
+  openingFloatMinor Int       @map("opening_float_minor")
+  closedById        String?   @map("closed_by_id") @db.Uuid
+  closedAt          DateTime? @map("closed_at") @db.Timestamptz(3)
+  expectedCashMinor Int?      @map("expected_cash_minor")
+  countedCashMinor  Int?      @map("counted_cash_minor")
+  varianceMinor     Int?      @map("variance_minor")
+  notes             String    @default("") @db.VarChar(300)
+
+  payments Payment[]
+  refunds  Refund[]
+
+  @@index([openedAt])
+  @@map("cash_sessions")
+}
+
+model Order {
+  id              String        @id @default(uuid()) @db.Uuid
+  /// Sequential number within the business day (assigned on the server).
+  orderNo         Int           @map("order_no")
+  businessDate    String        @map("business_date") @db.VarChar(10)
+  serviceType     ServiceType   @map("service_type")
+  tableNo         String?       @map("table_no") @db.VarChar(10)
+  customerName    String        @default("") @map("customer_name") @db.VarChar(60)
+  status          OrderStatus
+  paymentStatus   PaymentStatus @default(UNPAID) @map("payment_status")
+  subtotalMinor   Int           @map("subtotal_minor")
+  discountMinor   Int           @default(0) @map("discount_minor")
+  discountReason  String?       @map("discount_reason") @db.VarChar(120)
+  /// Tax contained in or added to the total.
+  taxMinor        Int           @default(0) @map("tax_minor")
+  totalMinor      Int           @map("total_minor")
+  paidMinor       Int           @default(0) @map("paid_minor")
+  refundedMinor   Int           @default(0) @map("refunded_minor")
+  taxSnapshot     Json          @default("[]") @map("tax_snapshot")
+  notes           String        @default("") @db.VarChar(300)
+  /// Client-generated id: the same submission can never create two orders.
+  clientRequestId String        @unique @map("client_request_id") @db.VarChar(64)
+  /// Created on a till while offline and synchronised later.
+  placedOffline   Boolean       @default(false) @map("placed_offline")
+  offlinePlacedAt DateTime?     @map("offline_placed_at") @db.Timestamptz(3)
+  needsReview     Boolean       @default(false) @map("needs_review")
+  reviewNote      String?       @map("review_note") @db.VarChar(300)
+  createdById     String?       @map("created_by_id") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  sentAt          DateTime?     @map("sent_at") @db.Timestamptz(3)
+  completedAt     DateTime?     @map("completed_at") @db.Timestamptz(3)
+  cancelledAt     DateTime?     @map("cancelled_at") @db.Timestamptz(3)
+  cancelReason    String?       @map("cancel_reason") @db.VarChar(200)
+  version         Int           @default(0)
+
+  lines     OrderLine[]
+  payments  Payment[]
+  refunds   Refund[]
+  printJobs PrintJob[]
+
+  @@unique([businessDate, orderNo])
+  @@index([status, businessDate])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderLine {
+  id             String         @id @default(uuid()) @db.Uuid
+  orderId        String         @map("order_id") @db.Uuid
+  productId      String         @map("product_id") @db.Uuid
+  name           String         @db.VarChar(100)
+  categoryName   String         @map("category_name") @db.VarChar(60)
+  /// Product price plus chosen option price changes, per unit.
+  unitPriceMinor Int            @map("unit_price_minor")
+  quantity       Int
+  lineTotalMinor Int            @map("line_total_minor")
+  modifiers      Json           @default("[]")
+  notes          String         @default("") @db.VarChar(200)
+  station        PrepStation
+  prepStatus     PrepStatus     @default(PENDING) @map("prep_status")
+  stockState     LineStockState @default(NOT_TRACKED) @map("stock_state")
+  /// Cost of goods for this line (paisa), captured when stock was consumed.
+  costMinor      Int            @default(0) @map("cost_minor")
+  sortOrder      Int            @default(0) @map("sort_order")
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([station, prepStatus])
+  @@map("order_lines")
+}
+
+model Payment {
+  id             String      @id @default(uuid()) @db.Uuid
+  orderId        String      @map("order_id") @db.Uuid
+  methodId       String      @map("method_id") @db.Uuid
+  methodName     String      @map("method_name") @db.VarChar(40)
+  kind           PaymentKind
+  amountMinor    Int         @map("amount_minor")
+  tenderedMinor  Int?        @map("tendered_minor")
+  changeMinor    Int         @default(0) @map("change_minor")
+  reference      String?     @db.VarChar(60)
+  idempotencyKey String      @unique @map("idempotency_key") @db.VarChar(64)
+  cashSessionId  String?     @map("cash_session_id") @db.Uuid
+  receivedById   String?     @map("received_by_id") @db.Uuid
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  order       Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  method      PaymentMethod @relation(fields: [methodId], references: [id], onDelete: Restrict)
+  cashSession CashSession?  @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("payments")
+}
+
+model Refund {
+  id             String      @id @default(uuid()) @db.Uuid
+  orderId        String      @map("order_id") @db.Uuid
+  methodId       String      @map("method_id") @db.Uuid
+  methodName     String      @map("method_name") @db.VarChar(40)
+  kind           PaymentKind
+  amountMinor    Int         @map("amount_minor")
+  reason         String      @db.VarChar(200)
+  idempotencyKey String      @unique @map("idempotency_key") @db.VarChar(64)
+  cashSessionId  String?     @map("cash_session_id") @db.Uuid
+  approvedById   String?     @map("approved_by_id") @db.Uuid
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  order       Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  method      PaymentMethod @relation(fields: [methodId], references: [id], onDelete: Restrict)
+  cashSession CashSession?  @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("refunds")
+}
+
+model Printer {
+  id           String      @id @default(uuid()) @db.Uuid
+  name         String      @db.VarChar(60)
+  role         PrinterRole @unique
+  /// Network printers: IP or host name reachable from the café server (raw TCP, usually port 9100).
+  host         String      @default("") @db.VarChar(100)
+  port         Int         @default(9100)
+  paperWidthMm Int         @default(80) @map("paper_width_mm")
+  isActive     Boolean     @default(true) @map("is_active")
+  cutPaper     Boolean     @default(true) @map("cut_paper")
+  openDrawer   Boolean     @default(false) @map("open_drawer")
+  /// ONLINE / OFFLINE / UNKNOWN, refreshed by the print service.
+  status       String      @default("UNKNOWN") @db.VarChar(20)
+  lastSeenAt   DateTime?   @map("last_seen_at") @db.Timestamptz(3)
+  lastError    String?     @map("last_error") @db.VarChar(300)
+  version      Int         @default(0)
+
+  @@map("printers")
+}
+
+model PrintJob {
+  id             String         @id @default(uuid()) @db.Uuid
+  /// order:destination:kind:reprintNo — UNIQUE, so the same ticket is never queued twice.
+  idempotencyKey String         @unique @map("idempotency_key") @db.VarChar(120)
+  role           PrinterRole
+  kind           PrintJobKind
+  orderId        String?        @map("order_id") @db.Uuid
+  /// Printer-independent content; rendered to ESC/POS for the printer's paper width.
+  payload        Json
+  status         PrintJobStatus @default(PENDING)
+  attempts       Int            @default(0)
+  lastError      String?        @map("last_error") @db.VarChar(300)
+  reprintNo      Int            @default(0) @map("reprint_no")
+  reprintReason  String?        @map("reprint_reason") @db.VarChar(200)
+  requestedById  String?        @map("requested_by_id") @db.Uuid
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  claimedAt      DateTime?      @map("claimed_at") @db.Timestamptz(3)
+  printedAt      DateTime?      @map("printed_at") @db.Timestamptz(3)
+
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([orderId])
+  @@map("print_jobs")
+}
+
+model ExpenseCategory {
+  id             String  @id @default(uuid()) @db.Uuid
+  name           String  @db.VarChar(60)
+  normalizedName String  @unique @map("normalized_name") @db.VarChar(60)
+  isActive       Boolean @default(true) @map("is_active")
+  sortOrder      Int     @default(0) @map("sort_order")
+
+  expenses Expense[]
+
+  @@map("expense_categories")
+}
+
+model Expense {
+  id           String    @id @default(uuid()) @db.Uuid
+  categoryId   String    @map("category_id") @db.Uuid
+  amountMinor  Int       @map("amount_minor")
+  businessDate String    @map("business_date") @db.VarChar(10)
+  paidWith     String    @default("") @map("paid_with") @db.VarChar(40)
+  note         String    @default("") @db.VarChar(300)
+  requestId    String    @unique @map("request_id") @db.VarChar(64)
+  createdById  String?   @map("created_by_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Expenses are never deleted: a mistake is voided with a reason.
+  voidedAt     DateTime? @map("voided_at") @db.Timestamptz(3)
+  voidReason   String?   @map("void_reason") @db.VarChar(200)
+  voidedById   String?   @map("voided_by_id") @db.Uuid
+
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([businessDate])
+  @@map("expenses")
 }

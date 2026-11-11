@@ -1,5 +1,113 @@
 # Bite & Brew — Test Results
 
+## Final build — complete system (2026-11-11)
+
+All results are from real runs in the development container (Node 22, PostgreSQL 16,
+Chromium/Playwright). Nothing is assumed.
+
+| Check | Result |
+|---|---|
+| TypeScript (shared, server, web) | ✅ 0 errors |
+| Shared unit tests (money, time, roles, units, order pricing & VAT) | ✅ 15 / 15 |
+| Server tests on a fresh database (foundation 43 + inventory 24 + POS/printing/finance 22) | ✅ 89 / 89 |
+| Browser acceptance tests against the **production build** | ✅ 28 / 28 |
+| Docker Compose: 4 migrations on empty DB, owner via CLI, order, PDF + Excel export, daily backup | ✅ |
+| Online demo page (phone + tablet): sign-in, order → bKash payment → kitchen ticket → dashboard → receipt preview → reports | ✅ no console errors |
+| Production dependency audit | ✅ 0 vulnerabilities |
+
+### Business requirements → evidence
+
+| Requirement | Evidence | Result |
+|---|---|---|
+| Server prices orders (client prices ignored), options validated | API "mixed order …", "client prices are ignored …" | ✅ |
+| Kitchen gets food only, barista drinks only, receipt complete | API ticket payload test; simulated printer receives kitchen bytes without drinks; browser test on live screens | ✅ |
+| Two tills cannot sell the last portion | API race test: one 201, one 409, stock 0 | ✅ |
+| No duplicate orders / payments / refunds | Concurrent identical submissions → one record each | ✅ |
+| VAT configurable, never assumed | No tax until added; inclusive extracted; exclusive added after discount | ✅ |
+| Discounts manager/owner only, with reason | Cashier 403; manager 10 % applied | ✅ |
+| Held orders: no stock until sent; resume keeps number | API + browser | ✅ |
+| Split payments; bKash/Nagad need transaction ID; overpay refused | API | ✅ |
+| Cash change calculation | Browser: ৳710 paid with ৳1,000 → ৳290 change | ✅ |
+| Cancel before preparation restores stock exactly; after start records waste | API (portions, milk, oat milk restored; started → wasted) | ✅ |
+| Paid orders must be refunded before cancelling; refunds ≤ paid; money records append-only | API + DB triggers | ✅ |
+| Kitchen/barista Start → Ready → Served, live | API + browser across two devices | ✅ |
+| ESC/POS to network printer, auto-cut, no duplicate printing, labelled reprint | Simulated TCP printer test | ✅ (real hardware: **not tested**) |
+| Unreachable printer → retried, then FAILED with error; 58 mm wraps to 32 chars; ৳ → "Tk" | API | ✅ |
+| Offline queue synced twice → created once; stock already gone → kept and flagged for review | API | ✅ |
+| Cash drawer: expected = float + cash sales − cash refunds; variance on close | API | ✅ |
+| Inventory purchases ≠ COGS; COGS from consumption; losses, expenses, net profit | API report test with exact figures | ✅ |
+| Daily / weekly / monthly / custom reports; PDF, Excel, CSV | API (file signatures `%PDF-`, `PK`) + Docker | ✅ |
+| Owner dashboard live figures | Browser test | ✅ |
+
+### Browser acceptance tests (production build)
+
+| | Test |
+|---|---|
+| ✓ | application starts: login page loads and health endpoint reports database up |
+| ✓ | wrong password is rejected with a clear message |
+| ✓ | owner can log in and lands on the owner dashboard |
+| ✓ | currency displays BDT / ৳ correctly (lakh grouping) |
+| ✓ | timezone is Asia/Dhaka (UTC+06:00) and the clock shows Dhaka time |
+| ✓ | every navigation link opens a working page (no blank/404/crash) |
+| ✓ | menu categories: create, edit and delete through the UI |
+| ✓ | duplicate category name is refused with a message |
+| ✓ | settings persist after refreshing the application |
+| ✓ | P2 inventory: add an ingredient, receive a delivery in kg, record waste |
+| ✓ | P2 menu item: create a batch item and its recipe through the UI |
+| ✓ | P2 production: prepare 20 portions → ingredients deducted once → 20 available everywhere (live) |
+| ✓ | P2 not enough stock: production is refused with the shortage shown |
+| ✓ | P2 roles: kitchen can record production; cashier sees availability but not inventory or costs |
+| ✓ | P2 dashboard shows live stock value, low-stock and sold-out counts |
+| ✓ | POS: cashier takes a dine-in order with options, pays cash with change; kitchen and barista get only their items live |
+| ✓ | POS: hold an order, then resume and send it |
+| ✓ | Owner: dashboard shows live sales, orders, kitchen/barista pending and printer status |
+| ✓ | Owner: VAT rate, expense, report and printer preview work end to end |
+| ✓ | cashier: lands on the POS, sees no owner areas, cannot manage the menu |
+| ✓ | kitchen and barista land on their own stations |
+| ✓ | manager sees settings read-only |
+| ✓ | tablet layout works: iPad portrait |
+| ✓ | tablet layout works: iPad landscape |
+| ✓ | tablet layout works: Android tablet |
+| ✓ | live update: a category created on one device appears on another without refresh |
+| ✓ | OFFLINE status is clearly displayed when the connection drops, and clears when it returns |
+| ✓ | logout ends the session |
+
+### POS / printing / finance API tests
+
+| | Test |
+|---|---|
+| ✓ | POS orders — a mixed order: priced on the server, stock deducted, split into kitchen + barista tickets |
+| ✓ | POS orders — client prices are ignored and invalid options are refused |
+| ✓ | POS orders — a double-tapped order is created once |
+| ✓ | POS orders — two tills cannot sell the last portion: one order succeeds, the other is refused |
+| ✓ | POS orders — order numbers are sequential per business day and dine-in needs a table |
+| ✓ | POS orders — VAT: no rate until the owner adds one; inclusive is extracted, exclusive is added |
+| ✓ | POS orders — discounts need a manager/owner and a reason |
+| ✓ | POS orders — held orders use no stock; resuming keeps the number; sending deducts stock |
+| ✓ | payments — cash with change completes the order and queues one receipt; a double-tap pays once |
+| ✓ | payments — split payment: card + bKash (bKash needs its transaction ID); overpayment refused |
+| ✓ | payments — refunds: manager only, never more than paid; payments and refunds are append-only |
+| ✓ | cancellation & stock reversal — cancelled before preparation → stock goes back exactly; cashier cannot cancel a sent order |
+| ✓ | cancellation & stock reversal — cancelled after the kitchen started → recorded as waste, not returned to stock |
+| ✓ | cancellation & stock reversal — a paid order must be refunded before it can be cancelled |
+| ✓ | kitchen & barista screens — each station sees only its items and moves them Start → Ready → Served |
+| ✓ | printing (simulated network printer) — sends ESC/POS to the right printer, marks it printed, never duplicates |
+| ✓ | printing (simulated network printer) — an unreachable printer: retried a few times, then FAILED with the error logged |
+| ✓ | offline orders (till lost connection) — syncing the same queue twice creates each order once, with its payment |
+| ✓ | offline orders (till lost connection) — an offline order that sold stock already gone is kept and flagged for review — never silently dropped or overwritten |
+| ✓ | cash drawer — expected cash = float + cash sales − cash refunds; variance on close |
+| ✓ | expenses & financial reports — report separates net sales, COGS, losses, expenses and purchases; exports CSV, Excel and PDF |
+| ✓ | expenses & financial reports — expenses are voided with a reason, never deleted |
+
+### Not tested
+- **Real thermal printers** (none purchased) — use the test procedure in PRINTING.md before go-live.
+- Real tablets and Windows touchscreens (tested with Chromium device emulation).
+- A till's offline queue with Wi-Fi physically switched off (server side tested; device side needs a hands-on check).
+- Off-site copy to a real cloud account (needs the owner's account; uses rclone).
+- Load with many devices at the same time.
+
+---
+
 ## Phase 2 — Menu items & inventory (2026-11-11)
 
 Run on a **fresh clone** with a brand-new database, following the README (install →
