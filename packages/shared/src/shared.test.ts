@@ -110,3 +110,17 @@ describe('order pricing', () => {
     expect(discountFrom(null, 47000)).toBe(0);
   });
 });
+
+import { formatPhone, isValidPhone, normalizePhone } from './index.js';
+describe('customer phone numbers', () => {
+  it('treats every way of writing a Bangladeshi number as the same', () => {
+    for (const v of ['01712345678', '01712-345678', '+8801712345678', '8801712345678', '+88 01712 345 678', '1712345678', '008801712345678']) {
+      expect(normalizePhone(v), v).toBe('01712345678');
+    }
+  });
+  it('validates and formats', () => {
+    expect(isValidPhone('abc')).toBe(false);
+    expect(isValidPhone('12')).toBe(false);
+    expect(formatPhone('+8801712345678')).toBe('01712-345678');
+  });
+});

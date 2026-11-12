@@ -83,7 +83,8 @@ export type RealtimeEvent =
   | { type: 'inventory.changed' }
   | { type: 'orders.changed'; orderId?: string }
   | { type: 'printers.changed' }
-  | { type: 'finance.changed' };
+  | { type: 'finance.changed' }
+  | { type: 'customers.changed' };
 
 export interface ApiErrorBody {
   error: { code: string; message: string; details?: unknown };

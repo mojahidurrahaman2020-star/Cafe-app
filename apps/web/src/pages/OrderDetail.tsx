@@ -46,6 +46,7 @@ export function OrderDetail({ orderId, onClose, onPay }: { orderId: string; onCl
           <div className="row" style={{ flexWrap: 'wrap' }}>
             <span className="badge neutral">{SERVICE_LABELS[o.serviceType]}{o.tableNo ? ` · Table ${o.tableNo}` : ''}</span>
             <span className="muted small">{fmt.dateTime(o.createdAt)} · {o.createdBy}</span>
+            {o.customerName && <span className="badge gold" data-testid="order-customer">{o.customerName}</span>}
             {o.placedOffline && <span className="badge warn">Taken offline</span>}
             {o.status === 'CANCELLED' && <span className="badge bad">Cancelled: {o.cancelReason}</span>}
           </div>

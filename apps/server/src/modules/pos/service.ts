@@ -26,7 +26,7 @@ export async function userNames(ids: (string | null | undefined)[]) {
 
 export function toOrderDTO(o: OrderRow, names: Map<string, string>): OrderDTO {
   return {
-    id: o.id, orderNo: o.orderNo, businessDate: o.businessDate, serviceType: o.serviceType, tableNo: o.tableNo, customerName: o.customerName,
+    id: o.id, orderNo: o.orderNo, businessDate: o.businessDate, serviceType: o.serviceType, tableNo: o.tableNo, customerName: o.customerName, customerId: o.customerId,
     status: o.status, paymentStatus: o.paymentStatus, subtotalMinor: o.subtotalMinor, discountMinor: o.discountMinor, discountReason: o.discountReason,
     taxMinor: o.taxMinor, totalMinor: o.totalMinor, paidMinor: o.paidMinor, refundedMinor: o.refundedMinor,
     dueMinor: o.status === 'CANCELLED' ? 0 : o.totalMinor - o.paidMinor,
@@ -161,11 +161,17 @@ export async function createOrder(tx: Tx, input: OrderCreateInput, actor: Actor,
   const date = businessDate(placedAt, settings.timezone, settings.businessDayStartHour);
   const orderNo = reuseNo && reuseNo.date === date ? reuseNo.no : await nextOrderNo(tx, date);
   const hold = !!input.hold;
+  let customer: { id: string; name: string } | null = null;
+  if (input.customerId) {
+    const c = await tx.customer.findUnique({ where: { id: input.customerId } });
+    if (!c || (!c.isActive && !offline)) throw badRequest('Choose an active customer');
+    customer = { id: c.id, name: c.name };
+  }
 
   const order = await tx.order.create({
     data: {
       orderNo, businessDate: date, serviceType: input.serviceType, tableNo: input.serviceType === 'DINE_IN' ? input.tableNo ?? null : null,
-      customerName: input.customerName ?? '', status: hold ? 'HELD' : 'OPEN', subtotalMinor: totals.subtotalMinor, discountMinor: totals.discountMinor,
+      customerName: customer?.name ?? input.customerName ?? '', customerId: customer?.id ?? null, status: hold ? 'HELD' : 'OPEN', subtotalMinor: totals.subtotalMinor, discountMinor: totals.discountMinor,
       discountReason: input.discount?.reason ?? null, taxMinor: totals.taxMinor, totalMinor: totals.totalMinor, taxSnapshot: totals.taxes,
       notes: input.notes ?? '', clientRequestId: input.clientRequestId, placedOffline: offline, offlinePlacedAt: offline ? placedAt : null,
       createdById: actor.id, sentAt: hold ? null : new Date(),

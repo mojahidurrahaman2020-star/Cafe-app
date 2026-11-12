@@ -54,6 +54,7 @@ export const PERMISSIONS = [
   'reports.view',
   'reports.export',
   'printers.manage',
+  'customers.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -86,8 +87,9 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'reports.view',
     'reports.export',
     'printers.manage',
+    'customers.manage',
   ],
-  CASHIER: ['menu.view', 'settings.view', 'pos.use', 'orders.view', 'orders.reprint'],
+  CASHIER: ['menu.view', 'settings.view', 'pos.use', 'orders.view', 'orders.reprint', 'customers.manage'],
   BARISTA: ['menu.view', 'settings.view', 'barista.view', 'orders.view', 'inventory.view'],
   KITCHEN: [
     'menu.view',

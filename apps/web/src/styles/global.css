@@ -298,3 +298,4 @@ table.table { width: 100%; border-collapse: collapse; }
 .meter { height: 10px; background: var(--cream-200); border-radius: 999px; overflow: hidden; }
 .meter span { display: block; height: 100%; background: var(--gold-500); border-radius: 999px; }
 .receipt-preview { background: #fff; color: #111; font: 13px/1.35 'Courier New', ui-monospace, monospace; padding: 16px; border: 1px dashed var(--cream-300); border-radius: 8px; overflow-x: auto; white-space: pre; margin: 0; }
+.chosen-customer { padding: 8px 12px; border-radius: var(--radius-sm); background: var(--gold-200); gap: 8px; }

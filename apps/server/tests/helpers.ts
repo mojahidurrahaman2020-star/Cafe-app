@@ -12,7 +12,7 @@ export async function resetData() {
   // Audit log is append-only by trigger; TRUNCATE is a deliberate DBA-level
   // operation that row triggers do not fire on, which is what a test reset needs.
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE print_jobs, payments, refunds, order_lines, orders, cash_sessions, expenses, expense_categories, tax_rates, payment_methods, printers, stock_movements, finished_movements, production_batches, recipe_lines, modifiers, modifier_groups, product_images, products, ingredients, suppliers, audit_logs, sessions, menu_categories, users, business_settings RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE customers, print_jobs, payments, refunds, order_lines, orders, cash_sessions, expenses, expense_categories, tax_rates, payment_methods, printers, stock_movements, finished_movements, production_batches, recipe_lines, modifiers, modifier_groups, product_images, products, ingredients, suppliers, audit_logs, sessions, menu_categories, users, business_settings RESTART IDENTITY CASCADE',
   );
   await seedBase();
   const hash = await hashPassword(PASSWORD);

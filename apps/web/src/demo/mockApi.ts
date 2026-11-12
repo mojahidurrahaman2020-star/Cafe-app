@@ -18,14 +18,14 @@ import {
   type ProductDTO, type ProductionBatchDTO, type Role, type SessionUser, type StockMode, type StockMovementDTO, type StockSummaryDTO,
   type SupplierDTO, type UnitCode, type UserDTO, type PrepStation,
   type TaxRateDTO, type PaymentMethodDTO, type PaymentKind, type OrderDTO, type CashSessionDTO, type PrinterDTO, type PrintJobDTO, type PrintPayload,
-  type ExpenseCategoryDTO, type ExpenseDTO, type ReportDTO, type StationTicketDTO, type PrepStatus, type PrinterRole,
+  type ExpenseCategoryDTO, type ExpenseDTO, type CustomerDTO, type CustomerDetailDTO, customerCreateSchema, customerUpdateSchema, normalizePhone, type ReportDTO, type StationTicketDTO, type PrepStatus, type PrinterRole,
 } from '@bitebrew/shared';
 import type { z } from 'zod';
 import fixture from './fixture.json';
 import { requestId } from '../lib/ids';
 
 export const DEMO_PASSWORD = 'demo-pass-2027';
-const KEY = 'bitebrew-online-demo-v3';
+const KEY = 'bitebrew-online-demo-v4';
 
 // ─────────── state ───────────
 interface Ing { id: string; name: string; dimension: Dimension; displayUnit: UnitCode; onHand: number; avgCost: number; minLevel: number; supplierId: string | null; isPackaging: boolean; isActive: boolean; notes: string; version: number }
@@ -42,7 +42,7 @@ interface State {
   sessionUserId: string | null; seq: number; requestIds: Record<string, true>;
   taxRates: TaxRateDTO[]; paymentMethods: PaymentMethodDTO[]; orders: OrderDTO[]; cash: (CashSessionDTO & { closed: boolean })[];
   printers: PrinterDTO[]; jobs: (PrintJobDTO & { payload: PrintPayload; orderId: string | null; key: string })[];
-  expenseCategories: ExpenseCategoryDTO[]; expenses: ExpenseDTO[];
+  expenseCategories: ExpenseCategoryDTO[]; expenses: ExpenseDTO[]; customers: CustomerDTO[];
 }
 
 function seed(): State {
@@ -84,6 +84,10 @@ function seed(): State {
     jobs: [],
     expenseCategories: ['Rent', 'Electricity', 'Water', 'Internet', 'Salaries', 'Repairs', 'Transportation', 'Cleaning', 'Marketing', 'Other expenses'].map((name, i) => ({ id: `00000000-0000-4000-8000-0000000002${String(i).padStart(2, '0')}`, name, isActive: true })),
     expenses: [],
+    customers: [
+      { name: 'Rahim Uddin', phone: '01712-345678', notes: 'Likes extra spicy' },
+      { name: 'Nasrin Akter', phone: '01912-999888', notes: '' },
+    ].map((c, i) => ({ id: `00000000-0000-4000-8000-0000000003${String(i).padStart(2, '0')}`, ...c, isActive: true, visits: 0, spentMinor: 0, lastVisitAt: null, version: 0, createdAt: new Date().toISOString() })),
   };
 }
 
@@ -608,7 +612,7 @@ r('POST', '/orders', (_m, b) => {
   const date = today();
   const o: OrderDTO & { clientRequestId: string } = {
     id: uid(), clientRequestId: d.clientRequestId, orderNo: reuse ?? Math.max(0, ...S.orders.filter((x) => x.businessDate === date).map((x) => x.orderNo)) + 1, businessDate: date,
-    serviceType: d.serviceType, tableNo: d.serviceType === 'DINE_IN' ? d.tableNo ?? null : null, customerName: d.customerName ?? '', status: d.hold ? 'HELD' : 'OPEN', paymentStatus: 'UNPAID',
+    serviceType: d.serviceType, tableNo: d.serviceType === 'DINE_IN' ? d.tableNo ?? null : null, customerName: S.customers.find((c) => c.id === d.customerId)?.name ?? d.customerName ?? '', customerId: d.customerId ?? null, status: d.hold ? 'HELD' : 'OPEN', paymentStatus: 'UNPAID',
     subtotalMinor: t.subtotalMinor, discountMinor: t.discountMinor, discountReason: d.discount?.reason ?? null, taxMinor: t.taxMinor, totalMinor: t.totalMinor, paidMinor: 0, refundedMinor: 0, dueMinor: t.totalMinor,
     taxes: t.taxes, notes: d.notes ?? '', placedOffline: false, needsReview: false, reviewNote: null, createdBy: u.fullName, createdAt: now(), completedAt: null, cancelledAt: null, cancelReason: null,
     lines, payments: [], refunds: [], version: 0,
@@ -798,6 +802,42 @@ export function demoDashboardExtras(period: string, canMoney: boolean) {
     printers: printerList().map((p) => ({ role: p.role, name: p.name, status: p.status, pendingJobs: p.pendingJobs, failedJobs: 0 })),
   };
 }
+
+
+// customers
+const custStats = (c: CustomerDTO): CustomerDTO => {
+  const os = S.orders.filter((o) => o.customerId === c.id && o.status === 'COMPLETED');
+  return { ...c, visits: os.length, spentMinor: os.reduce((a, o) => a + o.totalMinor - o.refundedMinor, 0), lastVisitAt: os.map((o) => o.createdAt).sort().at(-1) ?? null };
+};
+r('GET', '/customers', (_m, _b, q) => {
+  need('pos.use'); const term = (q.get('q') ?? '').toLowerCase(); const digits = term.replace(/\D/g, '');
+  return { customers: S.customers.filter((c) => (q.get('includeInactive') === 'true' || c.isActive) && (!term || c.name.toLowerCase().includes(term) || (digits.length >= 3 && normalizePhone(c.phone).includes(normalizePhone(digits).replace(/^0/, '')))))
+    .sort((a, b) => a.name.localeCompare(b.name)).map(custStats) };
+});
+r('GET', '/customers/:id', (m) => {
+  need('customers.manage'); const c = S.customers.find((x) => x.id === m[1]) ?? notFound('Customer not found');
+  const d: CustomerDetailDTO = { ...custStats(c), recentOrders: S.orders.filter((o) => o.customerId === c.id && o.status !== 'HELD').slice(-15).reverse().map((o) => ({ id: o.id, orderNo: o.orderNo, businessDate: o.businessDate, totalMinor: o.totalMinor, status: o.status, items: o.lines.map((l) => `${l.quantity}× ${l.name}`).join(', ') })) };
+  return { customer: d };
+});
+r('POST', '/customers', (_m, b) => {
+  need('customers.manage'); const d = parse(customerCreateSchema, b);
+  const ex = S.customers.find((c) => normalizePhone(c.phone) === normalizePhone(d.phone)); if (ex) conflict(`${ex.name} already has this phone number`);
+  const c: CustomerDTO = { id: uid(), name: clean(d.name), phone: d.phone.trim(), notes: d.notes ?? '', isActive: true, visits: 0, spentMinor: 0, lastVisitAt: null, version: 0, createdAt: now() };
+  S.customers.push(c); audit('customer.create', 'Customer', c.id, null, { name: c.name }); return [201, { customer: c }];
+});
+r('PATCH', '/customers/:id', (m, b) => {
+  need('customers.manage'); const { version, ...ch } = parse(customerUpdateSchema, b); const c = S.customers.find((x) => x.id === m[1]) ?? notFound('Customer not found');
+  if (c.version !== version) stale(c);
+  if (ch.phone && S.customers.some((x) => x.id !== c.id && normalizePhone(x.phone) === normalizePhone(ch.phone!))) conflict('Another customer already has this phone number');
+  Object.assign(c, ch.name ? { name: clean(ch.name) } : {}, ch.phone ? { phone: ch.phone.trim() } : {}, ch.notes !== undefined ? { notes: ch.notes } : {}, ch.isActive !== undefined ? { isActive: ch.isActive } : {}, { version: c.version + 1 });
+  return { customer: custStats(c) };
+});
+r('DELETE', '/customers/:id', (m) => {
+  need('orders.cancel'); const c = S.customers.find((x) => x.id === m[1]) ?? notFound('Customer not found');
+  if (S.orders.some((o) => o.customerId === c.id)) conflict('This customer has past orders, so they cannot be deleted. Mark them inactive instead.');
+  S.customers = S.customers.filter((x) => x !== c); return [204, null];
+});
+r('GET', '/setup/status', () => ({ needsSetup: false, tokenRequired: false }));
 
 // ─────────── fetch interceptor ───────────
 export function handleDemoRequest(method: string, url: string, body: unknown): { status: number; body: unknown } {

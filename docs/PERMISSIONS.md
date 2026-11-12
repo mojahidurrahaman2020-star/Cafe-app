@@ -33,6 +33,7 @@ Every permission (●) is enforced by the server.
 | ● `reports.view` | Financial reports | ✅ | ✅ | — | — | — |
 | ● `reports.export` | Export PDF / CSV / Excel | ✅ | ✅ | — | — | — |
 | ● `printers.manage` | Configure printers, test print | ✅ | ✅ | — | — | — |
+| ● `customers.manage` |  | ✅ | ✅ | ✅ | — | — |
 
 ## Additional rules
 

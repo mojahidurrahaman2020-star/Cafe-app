@@ -7,3 +7,4 @@ export * from './units.js';
 export * from './inventory.js';
 export * from './pos.js';
 export * from './printing.js';
+export * from './customers.js';

@@ -25,9 +25,10 @@ A short, practical guide for running the café on the system. For installation s
      when it is sold.
    - *Ready-made* (bottled drinks, bought desserts): receive units with their cost.
    - Add customisation options (milk type, extra shot, spice level) on the **Options** tab.
-10. **Printers** → when the printers arrive, enter each one's IP address, choose 58 or 80 mm,
+10. **Customers** → add regular customers (name + phone). At the till tap **+ Regular customer** to pick one by name or phone; their visits and spending build up automatically.
+11. **Printers** → when the printers arrive, enter each one's IP address, choose 58 or 80 mm,
     press *Save & check connection*, then *Test print*.
-11. On the main till: **Settings → This device → Allow offline orders** (manager/owner only).
+12. On the main till: **Settings → This device → Allow offline orders** (manager/owner only).
 
 ## Every day
 

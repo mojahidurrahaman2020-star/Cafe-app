@@ -127,7 +127,7 @@ await test('timezone is Asia/Dhaka (UTC+06:00) and the clock shows Dhaka time', 
 await test('every navigation link opens a working page (no blank/404/crash)', async () => {
   const p = owner.page;
   const links = await p.$$eval('nav.nav a', (as) => as.map((a) => ({ href: a.getAttribute('href'), label: a.textContent.trim() })));
-  assert(links.length === 15, `expected 15 nav links for owner, got ${links.length}`);
+  assert(links.length === 16, `expected 15 nav links for owner, got ${links.length}`);
   for (const l of links) {
     await p.click(`nav.nav a[href="${l.href}"]`);
     await p.waitForURL((u) => u.pathname === l.href);
@@ -432,6 +432,58 @@ await test('Owner: VAT rate, expense, report and printer preview work end to end
   await p.waitForSelector('[data-testid=tax-rates]');
   assert(await p.isVisible('[data-testid=this-device]'), 'device section missing');
   await o.ctx.close();
+});
+
+
+await test('Customers: save a regular customer (name + phone), find them by phone, attach to an order, edit', async () => {
+  const uniq = String(Date.now()).slice(-7);
+  const phone = `0171${uniq}`;
+  const o = await newSession({ viewport: { width: 1366, height: 900 } });
+  await login(o.page, 'owner');
+  const p = o.page;
+  await p.goto(`${BASE}/customers`);
+  await p.waitForSelector('[data-testid=customers-page]');
+  await p.click('[data-testid=customer-new]');
+  await p.fill('[data-testid=customer-name]', `E2E Customer ${uniq}`);
+  await p.fill('[data-testid=customer-phone]', phone);
+  await p.click('[data-testid=customer-save]');
+  await p.waitForSelector(`[data-testid=customer-row]:has-text("E2E Customer ${uniq}")`);
+  // the same number written differently is refused
+  await p.click('[data-testid=customer-new]');
+  await p.fill('[data-testid=customer-name]', 'Duplicate');
+  await p.fill('[data-testid=customer-phone]', `+88${phone}`);
+  await p.click('[data-testid=customer-save]');
+  await p.waitForSelector('.modal [role=alert]');
+  await p.keyboard.press('Escape');
+  // search by part of the phone number
+  await p.fill('[data-testid=customer-search]', uniq.slice(-5));
+  await p.waitForSelector(`[data-testid=customer-row]:has-text("E2E Customer ${uniq}")`);
+  // edit
+  await p.locator('[data-testid=customer-row]').first().locator('[data-testid=customer-edit]').click();
+  await p.fill('[data-testid=customer-name]', `E2E Customer ${uniq} Edited`);
+  await p.click('[data-testid=customer-save]');
+  await p.waitForSelector(`[data-testid=customer-row]:has-text("Edited")`);
+  // pick at the till
+  const till = await newSession({ viewport: { width: 1366, height: 800 } });
+  await login(till.page, 'cashier');
+  const t = till.page;
+  await t.waitForSelector('[data-testid=pos-tile]');
+  await t.locator('[data-testid=pos-tile]', { hasText: 'Lemon Tea' }).click();
+  await t.click('[data-testid=customer-choose]');
+  await t.fill('[data-testid=customer-pick-search]', uniq.slice(-5));
+  await t.locator('[data-testid=customer-option]', { hasText: 'Edited' }).click();
+  await t.waitForSelector('[data-testid=customer-picker] >> text=Edited');
+  await t.click('[data-testid=send-order]');
+  await t.waitForSelector('[data-testid=payment-confirm]');
+  await t.click('[data-testid=pay-Cash]');
+  await t.click('[data-testid=payment-confirm]');
+  await t.waitForSelector('[data-testid=payment-complete]');
+  // history shows the visit
+  await p.fill('[data-testid=customer-search]', uniq.slice(-5));
+  await p.reload();
+  await p.fill('[data-testid=customer-search]', uniq.slice(-5));
+  await p.waitForFunction(() => document.querySelector('[data-testid=customer-row] td:nth-child(3)')?.textContent.trim() === '1', null, { timeout: 8000 });
+  await Promise.all([o.ctx.close(), till.ctx.close()]);
 });
 
 // ---------------- Role permissions in the UI ----------------

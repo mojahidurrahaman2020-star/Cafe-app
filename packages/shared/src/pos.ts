@@ -86,6 +86,8 @@ export const orderCreateSchema = z
     serviceType: z.enum(SERVICE_TYPES),
     tableNo: z.string().trim().max(10).optional().nullable(),
     customerName: z.string().trim().max(60).optional(),
+    /** A saved regular customer; the server stores their name on the order. */
+    customerId: z.string().uuid().optional().nullable(),
     notes: z.string().trim().max(300).optional(),
     lines: z.array(orderLineInputSchema).min(1, 'Add at least one item').max(100),
     discount: discountSchema.nullable().optional(),
@@ -215,6 +217,7 @@ export interface OrderDTO {
   serviceType: ServiceType;
   tableNo: string | null;
   customerName: string;
+  customerId: string | null;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
   subtotalMinor: number;

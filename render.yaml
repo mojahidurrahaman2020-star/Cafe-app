@@ -1,0 +1,32 @@
+# One-click website hosting on Render (https://render.com).
+# Dashboard → New → Blueprint → pick this GitHub repository → Apply.
+# Render builds the Dockerfile, creates a PostgreSQL database, gives you an HTTPS address
+# like https://bite-and-brew.onrender.com, and generates a SETUP_TOKEN you need on first visit.
+services:
+  - type: web
+    name: bite-and-brew
+    runtime: docker
+    plan: starter            # paid plan keeps the site always on; the free plan sleeps
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: TRUST_PROXY
+        value: "1"
+      - key: PRINT_SERVICE
+        value: "off"          # cloud servers cannot reach printers on the café network
+      - key: WEB_ORIGIN
+        sync: false           # set to your https address after the first deploy
+      - key: SETUP_TOKEN
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bite-and-brew-db
+          property: connectionString
+databases:
+  - name: bite-and-brew-db
+    plan: basic-256mb
+    databaseName: bitebrew
+    user: bitebrew

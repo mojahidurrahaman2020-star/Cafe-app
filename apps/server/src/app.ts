@@ -21,6 +21,8 @@ import { productsRouter } from './modules/products/routes.js';
 import { posRouter } from './modules/pos/routes.js';
 import { printingRouter } from './modules/printing/routes.js';
 import { financeRouter } from './modules/finance/routes.js';
+import { setupRouter } from './modules/setup/routes.js';
+import { customersRouter } from './modules/customers/routes.js';
 import { settingsRouter } from './modules/settings/routes.js';
 import { usersRouter } from './modules/users/routes.js';
 
@@ -60,6 +62,7 @@ export function createApp() {
   });
   api.use(requireClientHeader);
   api.use(healthRouter);
+  api.use(setupRouter);
   api.use(loadSession);
   api.use('/auth', authRouter);
   api.use(requireAuth);
@@ -74,6 +77,7 @@ export function createApp() {
   api.use(posRouter);
   api.use(printingRouter);
   api.use(financeRouter);
+  api.use(customersRouter);
   api.use(notFoundHandler);
   app.use('/api', api);
 

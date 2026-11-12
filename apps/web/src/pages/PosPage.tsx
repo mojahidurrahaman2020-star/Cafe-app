@@ -15,6 +15,9 @@ import { cacheMenu, cachedMenu, cacheMethods, cachedMethods, enqueueOrder, offli
 import { useCashSession, useOrders, usePaymentMethods, useProducts, useTaxRates } from '../lib/queries';
 import { useConnection } from '../realtime/ConnectionContext';
 import { OrderDetail } from './OrderDetail';
+import { CustomerForm } from '../components/CustomerForm';
+import { useCustomers } from '../lib/queries';
+import { formatPhone, type CustomerDTO } from '@bitebrew/shared';
 
 interface CartLine { key: string; product: ProductDTO; quantity: number; modifierIds: string[]; notes: string }
 
@@ -147,6 +150,40 @@ export function PaymentDialog({ order, onClose, onDone, offlineQueued }: { order
   );
 }
 
+// ─────────── regular customer picker ───────────
+function CustomerPicker({ value, onChange, disabled }: { value: CustomerDTO | null; onChange: (c: CustomerDTO | null) => void; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [adding, setAdding] = useState(false);
+  const list = useCustomers(q.trim(), false, open);
+  if (disabled) return null;
+  return (
+    <div className="stack" style={{ gap: 6 }} data-testid="customer-picker">
+      {value ? (
+        <div className="row chosen-customer">
+          <div style={{ flex: 1, minWidth: 0 }}><b>{value.name}</b><div className="small muted num">{formatPhone(value.phone)} · {value.visits} visit(s)</div></div>
+          <button className="btn sm ghost" onClick={() => onChange(null)} aria-label="Remove customer">Remove</button>
+        </div>
+      ) : (
+        <button className="btn secondary sm" onClick={() => setOpen(true)} data-testid="customer-choose">+ Regular customer (optional)</button>
+      )}
+      {open && (
+        <Modal title="Choose a customer" onClose={() => setOpen(false)} footer={<button className="btn gold" onClick={() => setAdding(true)} data-testid="customer-add-new">New customer</button>}>
+          <input className="input" autoFocus placeholder="Type a name or phone number…" aria-label="Search customers" value={q} onChange={(e) => setQ(e.target.value)} data-testid="customer-pick-search" />
+          <div className="stack" style={{ gap: 6, maxHeight: 320, overflowY: 'auto' }}>
+            {list.isPending ? <Loading /> : (list.data ?? []).length === 0 ? <div className="empty small">No match. Add them as a new customer.</div> : (list.data ?? []).map((c) => (
+              <button key={c.id} className="btn secondary" style={{ justifyContent: 'space-between' }} onClick={() => { onChange(c); setOpen(false); setQ(''); }} data-testid="customer-option">
+                <span>{c.name}</span><span className="num muted small">{formatPhone(c.phone)}</span>
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
+      {adding && <CustomerForm initial={null} presetPhone={/^[\d+\s-]{4,}$/.test(q) ? q : undefined} onClose={() => setAdding(false)} onSaved={(c) => { onChange(c); setOpen(false); setQ(''); }} />}
+    </div>
+  );
+}
+
 // ─────────── cash drawer ───────────
 function DrawerButton() {
   const fmt = useFormat();
@@ -224,6 +261,7 @@ export function PosPage() {
   const [paying, setPaying] = useState<OrderDTO | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const [resumeFrom, setResumeFrom] = useState<OrderDTO | null>(null);
+  const [customer, setCustomer] = useState<CustomerDTO | null>(null);
   const [submitKey, setSubmitKey] = useState(requestId);
   const [queued, setQueued] = useState(queuedOrders().length);
   const [offlinePay, setOfflinePay] = useState<QueuedOrder | null>(null);
@@ -267,11 +305,11 @@ export function PosPage() {
       return same ? c.map((l) => (l === same ? { ...l, quantity: l.quantity + 1 } : l)) : [...c, { key: requestId(), product: p, quantity: 1, modifierIds, notes }];
     });
   };
-  const reset = () => { setCart([]); setOrderNotes(''); setDiscount(null); setTableNo(''); setResumeFrom(null); setSubmitKey(requestId()); };
+  const reset = () => { setCustomer(null); setCart([]); setOrderNotes(''); setDiscount(null); setTableNo(''); setResumeFrom(null); setSubmitKey(requestId()); };
 
   const place = useMutation({
     mutationFn: (hold: boolean) => post<{ order: OrderDTO }>('/orders', {
-      clientRequestId: submitKey, serviceType, tableNo: serviceType === 'DINE_IN' ? tableNo : null, notes: orderNotes || undefined, hold,
+      clientRequestId: submitKey, serviceType, tableNo: serviceType === 'DINE_IN' ? tableNo : null, notes: orderNotes || undefined, hold, customerId: customer?.id,
       discount: discount ?? undefined, replacesHeldOrderId: resumeFrom?.id,
       lines: cart.map((l) => ({ productId: l.product.id, quantity: l.quantity, modifierIds: l.modifierIds, notes: l.notes || undefined })),
     }),
@@ -291,7 +329,7 @@ export function PosPage() {
 
   function queueOffline() {
     const q: QueuedOrder = {
-      clientRequestId: submitKey, serviceType, tableNo: serviceType === 'DINE_IN' ? tableNo : null, notes: orderNotes || undefined,
+      clientRequestId: submitKey, serviceType, tableNo: serviceType === 'DINE_IN' ? tableNo : null, notes: orderNotes || undefined, customerId: customer?.id, customerName: customer?.name,
       lines: cart.map((l) => ({ productId: l.product.id, quantity: l.quantity, modifierIds: l.modifierIds, notes: l.notes || undefined, name: l.product.name, unitPriceMinor: unitPrice(l.product, l.modifierIds) })),
       offlinePlacedAt: new Date().toISOString(), totalMinor: totals.totalMinor, payments: [], localNo: `OFF-${String(queuedOrders().length + 1).padStart(3, '0')}`,
     };
@@ -383,6 +421,7 @@ export function PosPage() {
                 </div>
               ))}
             </div>
+            <CustomerPicker value={customer} onChange={setCustomer} disabled={offline} />
             <input className="input" placeholder="Order note (optional)" value={orderNotes} maxLength={300} onChange={(e) => setOrderNotes(e.target.value)} />
             <div className="totals">
               <div><span>Subtotal</span><span className="num">{fmt.money(totals.subtotalMinor)}</span></div>

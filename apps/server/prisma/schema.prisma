@@ -555,6 +555,8 @@ model Order {
   serviceType     ServiceType   @map("service_type")
   tableNo         String?       @map("table_no") @db.VarChar(10)
   customerName    String        @default("") @map("customer_name") @db.VarChar(60)
+  /// Regular customer (optional). customerName stays as a snapshot of the name at the time.
+  customerId      String?       @map("customer_id") @db.Uuid
   status          OrderStatus
   paymentStatus   PaymentStatus @default(UNPAID) @map("payment_status")
   subtotalMinor   Int           @map("subtotal_minor")
@@ -582,12 +584,14 @@ model Order {
   cancelReason    String?       @map("cancel_reason") @db.VarChar(200)
   version         Int           @default(0)
 
+  customer  Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
   lines     OrderLine[]
   payments  Payment[]
   refunds   Refund[]
   printJobs PrintJob[]
 
   @@unique([businessDate, orderNo])
+  @@index([customerId])
   @@index([status, businessDate])
   @@index([createdAt])
   @@map("orders")
@@ -744,4 +748,25 @@ model Expense {
 
   @@index([businessDate])
   @@map("expenses")
+}
+
+/// Regular customers: name and phone number (Bangladeshi mobile numbers are normalised so
+/// 01712-345678, +8801712345678 and 8801712345678 are the same person).
+model Customer {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String   @db.VarChar(80)
+  phone           String   @db.VarChar(20)
+  /// Digits only, +880/880 prefix converted to a leading 0 — used for uniqueness and search.
+  normalizedPhone String   @unique @map("normalized_phone") @db.VarChar(20)
+  notes           String   @default("") @db.VarChar(300)
+  isActive        Boolean  @default(true) @map("is_active")
+  version         Int      @default(0)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdById     String?  @map("created_by_id") @db.Uuid
+
+  orders Order[]
+
+  @@index([name])
+  @@map("customers")
 }

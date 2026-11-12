@@ -13,6 +13,8 @@ import { InventoryPage } from './pages/InventoryPage';
 import { ProductionPage } from './pages/ProductionPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { LoginPage } from './pages/LoginPage';
+import { SetupPage } from './pages/SetupPage';
+import { CustomersPage } from './pages/CustomersPage';
 import { PosPage } from './pages/PosPage';
 import { StationPage } from './pages/StationPage';
 import { PrintersPage } from './pages/PrintersPage';
@@ -53,11 +55,13 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/setup" element={<SetupPage />} />
       <Route element={<RequireAuth><AppShell /></RequireAuth>}>
         <Route index element={<Home />} />
         <Route path="dashboard" element={<Guard permission="dashboard.view"><DashboardPage /></Guard>} />
         <Route path="menu" element={<Guard permission="menu.view"><CategoriesPage /></Guard>} />
         <Route path="settings" element={<Guard permission="settings.view"><SettingsPage /><SettingsExtras /></Guard>} />
+        <Route path="customers" element={<Guard permission="customers.manage"><CustomersPage /></Guard>} />
         <Route path="users" element={<Guard permission="users.view"><UsersPage /></Guard>} />
         <Route path="audit" element={<Guard permission="audit.view"><AuditPage /></Guard>} />
         <Route path="account" element={<AccountPage />} />

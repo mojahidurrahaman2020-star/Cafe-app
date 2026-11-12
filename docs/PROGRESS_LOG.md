@@ -2,6 +2,30 @@
 
 Newest first. Each entry: what changed, why, and what was verified.
 
+## 2026-11-12 — Website hosting and regular customers
+
+**Owner request:** deliver it as a website, keep menu editing, save regular customers' names
+and phone numbers, and provide all the files.
+
+**Built**
+- Regular customers: `customers` table (migration), name + phone (Bangladeshi numbers normalised
+  so 01712-345678 / +8801712345678 are one person), notes, active/inactive, visit count and total
+  spent, search by name or any part of the phone, Customers page, picker at the till with quick
+  "new customer", name on tickets/receipts and order details, audit entries, delete only when
+  there are no orders. New permission `customers.manage` (owner, manager, cashier).
+- Website hosting: `render.yaml` blueprint, `docs/WEBSITE_HOSTING.md`, and a first-run
+  **setup page** (`/setup`) that creates the owner account from the browser using a
+  `SETUP_TOKEN`; it only works while no account exists.
+- Menu editing already existed (Menu items → pencil: price, recipe, options, photo, availability).
+
+**Problems found and fixed:** phone formatting rule expected one digit too many (caught by a
+test).
+
+**Verified:** 17 unit, 97 API and 29 browser tests pass; first-run setup checked in a browser
+(wrong code refused, owner created, setup page then disappears).
+
+**Not done:** an actual live website address — hosting needs the owner's own account.
+
 ## 2026-11-11 — Complete system (owner: "build the final app, no more phases")
 
 **Built**

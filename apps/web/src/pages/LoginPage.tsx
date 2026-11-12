@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { ROLE_HOME } from '@bitebrew/shared';
-import { errorMessage } from '../api/client';
+import { errorMessage, get } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { EnvBanner, StatusPill } from '../layout/AppShell';
 import { IS_ONLINE_DEMO } from '../lib/demo';
@@ -24,7 +25,9 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const setup = useQuery({ queryKey: ['setup'], queryFn: () => get<{ needsSetup: boolean }>('/setup/status'), enabled: !IS_ONLINE_DEMO && !user, retry: false });
   if (user) return <Navigate to={ROLE_HOME[user.role]} replace />;
+  if (setup.data?.needsSetup) return <Navigate to="/setup" replace />;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

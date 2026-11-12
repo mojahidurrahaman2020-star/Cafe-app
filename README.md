@@ -22,9 +22,15 @@ and the [Owner's Guide](docs/OWNER_GUIDE.md).
 | Three printers (receipt / barista / kitchen), auto-split, ESC/POS, reprint, status | ✅ built — **not yet tested on real printers** |
 | Expenses, financial reports (day/week/month/custom), PDF / Excel / CSV | ✅ |
 | Owner dashboard with live figures | ✅ |
+| Regular customers (name + phone, visit history, pick at the till) | ✅ |
 | Offline order queue on tills with sync & conflict review | ✅ |
 | Daily backups, restore, off-site copy script | ✅ (off-site needs your cloud account) |
 | Live online replica + remote owner dashboard | Not built (use VPN to the café server — see DEPLOYMENT.md) |
+
+## Put it online as a website
+
+See [docs/WEBSITE_HOSTING.md](docs/WEBSITE_HOSTING.md) (one-click Render blueprint in `render.yaml`;
+first visit shows a page to create the owner account).
 
 ## Try it online (no installation)
 

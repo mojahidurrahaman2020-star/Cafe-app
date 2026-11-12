@@ -80,3 +80,12 @@ export const usePrintJobs = (params: { status?: string; orderId?: string; limit?
   if (params.orderId) qs.set('orderId', params.orderId);
   return useQuery({ queryKey: ['print-jobs', params], queryFn: async () => (await get<{ jobs: PrintJobDTO[] }>(`/print-jobs?${qs}`)).jobs });
 };
+
+import type { CustomerDTO } from '@bitebrew/shared';
+export const useCustomers = (q = '', includeInactive = false, enabled = true) =>
+  useQuery({
+    queryKey: ['customers', q, includeInactive],
+    queryFn: async () => (await get<{ customers: CustomerDTO[] }>(`/customers?${new URLSearchParams({ ...(q ? { q } : {}), ...(includeInactive ? { includeInactive: 'true' } : {}) })}`)).customers,
+    enabled,
+    placeholderData: (prev) => prev,
+  });

@@ -15,6 +15,8 @@ const schema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   WEB_DIST_DIR: z.string().optional(),
   /** Deliver print jobs to network printers from this server (on by default). */
+  /** Secret that allows creating the very first owner account from the website (first-run setup). */
+  SETUP_TOKEN: z.string().min(12).optional(),
   PRINT_SERVICE: z.enum(['on', 'off']).default('on'),
 });
 

@@ -20,6 +20,7 @@ export const NAV: NavItem[] = [
   { to: '/barista', label: 'Barista', icon: 'barista', permission: 'barista.view', section: 'Operations' },
   { to: '/availability', label: 'Availability', icon: 'availability', permission: 'menu.view', section: 'Operations' },
   { to: '/products', label: 'Menu items', icon: 'products', permission: 'menu.view', navAlsoRequires: 'inventory.view', section: 'Back office' },
+  { to: '/customers', label: 'Customers', icon: 'users', permission: 'customers.manage', section: 'Back office' },
   { to: '/menu', label: 'Menu categories', icon: 'menu', permission: 'menu.view', navAlsoRequires: 'menu.manage', section: 'Back office' },
   { to: '/inventory', label: 'Inventory', icon: 'inventory', permission: 'inventory.view', section: 'Back office' },
   { to: '/production', label: 'Production', icon: 'production', permission: 'production.manage', section: 'Back office' },

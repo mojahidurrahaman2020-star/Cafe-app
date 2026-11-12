@@ -113,6 +113,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         if (ev.type === 'finance.changed') {
           for (const k of ['expenses', 'report', 'cash', 'dashboard']) void qc.invalidateQueries({ queryKey: [k] });
         }
+        if (ev.type === 'customers.changed') void qc.invalidateQueries({ queryKey: ['customers'] });
         if (ev.type === 'settings.changed') {
           for (const k of ['tax-rates', 'payment-methods']) void qc.invalidateQueries({ queryKey: [k] });
         }

@@ -20,6 +20,7 @@ export interface QueuedOrder {
   serviceType: 'DINE_IN' | 'TAKEAWAY';
   tableNo?: string | null;
   customerName?: string;
+  customerId?: string;
   notes?: string;
   lines: { productId: string; quantity: number; modifierIds: string[]; notes?: string; name: string; unitPriceMinor: number }[];
   offlinePlacedAt: string;
