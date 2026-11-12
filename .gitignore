@@ -13,3 +13,11 @@ e2e/results/
 coverage/
 apps/web/dist-demo/
 *.zip
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.jks
+*.keystore
+*.apk
+*.aab

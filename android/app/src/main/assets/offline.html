@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Offline</title>
+<style>
+  body { margin:0; min-height:100vh; font-family: system-ui, sans-serif; background:#f7f0e3; color:#2a1a10; display:grid; place-items:center; padding:24px; }
+  .box { max-width:440px; width:100%; background:#fffaf2; border:1px solid #e2d2b6; border-radius:14px; padding:24px; display:flex; flex-direction:column; gap:14px; text-align:center; }
+  .pill { align-self:center; background:#a0302a; color:#fff; font-weight:800; letter-spacing:.06em; padding:6px 14px; border-radius:999px; font-size:.85rem; }
+  h1 { margin:0; font: 700 1.4rem Georgia, serif; color:#3b2418; }
+  p { margin:0; color:#6b5546; line-height:1.45; }
+  code { word-break: break-all; font-size:.85rem; color:#3b2418; }
+  a { display:block; min-height:52px; line-height:52px; border-radius:10px; text-decoration:none; font-weight:700; }
+  .primary { background:#b8913a; color:#24150d; }
+  .secondary { background:#fff; border:1px solid #e2d2b6; color:#3b2418; }
+</style></head>
+<body>
+<div class="box">
+  <span class="pill">OFFLINE</span>
+  <h1>Can't reach the café system</h1>
+  <p>Check the Wi-Fi or mobile data on this phone, and that the café system is switched on.</p>
+  <p><code id="u"></code></p>
+  <a class="primary" href="bitebrew://retry">Try again</a>
+  <a class="secondary" href="bitebrew://change">Change café address</a>
+</div>
+<script>
+  var q = new URLSearchParams(location.search).get('url');
+  if (q) document.getElementById('u').textContent = q;
+</script>
+</body></html>

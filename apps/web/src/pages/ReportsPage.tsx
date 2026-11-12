@@ -70,6 +70,12 @@ export function ReportsPage() {
   const [from, to] = today.data ? (preset === 'custom' ? [custom[0] || today.data, custom[1] || today.data] : range(preset, today.data)) : ['', ''];
   const q = useQuery({ queryKey: ['report', from, to], queryFn: async () => (await get<{ report: ReportDTO }>(`/reports/summary?from=${from}&to=${to}`)).report, enabled: !!from });
   const download = async (format: 'csv' | 'xlsx' | 'pdf') => {
+    // The Android app's browser cannot save in-page (blob) files; a direct link is saved by the
+    // phone's download manager instead (the server sends the file as an attachment).
+    if (navigator.userAgent.includes('BiteBrewApp')) {
+      window.location.assign(`/api/reports/export?from=${from}&to=${to}&format=${format}`);
+      return;
+    }
     try {
       const res = await fetch(`/api/reports/export?from=${from}&to=${to}&format=${format}`, { credentials: 'same-origin' });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error?.message ?? 'Export failed');
