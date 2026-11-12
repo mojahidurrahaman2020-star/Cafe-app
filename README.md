@@ -27,6 +27,10 @@ and the [Owner's Guide](docs/OWNER_GUIDE.md).
 | Daily backups, restore, off-site copy script | ✅ (off-site needs your cloud account) |
 | Live online replica + remote owner dashboard | Not built (use VPN to the café server — see DEPLOYMENT.md) |
 
+## Android app
+
+See [android/README.md](android/README.md) (installable APK that connects to your café website).
+
 ## Put it online as a website
 
 See [docs/WEBSITE_HOSTING.md](docs/WEBSITE_HOSTING.md) (one-click Render blueprint in `render.yaml`;

@@ -23,7 +23,10 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
-import androidx.webkit.WebViewAssetLoader;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Bite & Brew Android app: a full-screen shell around the café's website.
@@ -41,7 +44,6 @@ public class MainActivity extends Activity {
     private static final int FILE_CHOOSER = 42;
 
     private WebView web;
-    private WebViewAssetLoader assetLoader;
     private ValueCallback<Uri[]> filePathCallback;
     private SharedPreferences prefs;
     private boolean onLocalPage = true;
@@ -51,10 +53,6 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); // tills should not sleep
-
-        assetLoader = new WebViewAssetLoader.Builder()
-                .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
-                .build();
 
         web = new WebView(this);
         setContentView(web);
@@ -110,6 +108,23 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Serves the bundled pages (start, offline, demo) under https://appassets.androidplatform.net/assets/. */
+    private WebResourceResponse serveAsset(Uri u) {
+        if (!"appassets.androidplatform.net".equals(u.getHost())) return null;
+        String path = u.getPath();
+        if (path == null || !path.startsWith("/assets/")) return null;
+        String name = path.substring("/assets/".length());
+        String mime = name.endsWith(".html") ? "text/html" : name.endsWith(".js") ? "application/javascript"
+                : name.endsWith(".css") ? "text/css" : name.endsWith(".png") ? "image/png" : name.endsWith(".svg") ? "image/svg+xml" : "application/octet-stream";
+        try {
+            InputStream in = getAssets().open(name);
+            return new WebResourceResponse(mime, "utf-8", in);
+        } catch (Exception e) {
+            Map<String, String> h = new HashMap<>();
+            return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found", h, new ByteArrayInputStream(new byte[0]));
+        }
+    }
+
     private String savedUrl() { return prefs.getString(KEY_URL, null); }
 
     private void openStart() {
@@ -121,7 +136,7 @@ public class MainActivity extends Activity {
     private class Client extends WebViewClient {
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-            return assetLoader.shouldInterceptRequest(request.getUrl());
+            return serveAsset(request.getUrl());
         }
 
         @Override
@@ -197,6 +212,12 @@ public class MainActivity extends Activity {
             return;
         }
         super.onActivityResult(requestCode, resultCode, data);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        CookieManager.getInstance().flush(); // keep staff signed in if the app is closed
     }
 
     @Override
